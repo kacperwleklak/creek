@@ -21,12 +21,17 @@ public class Creek {
         this.cab = cab;
     }
 
+    public IncrementalIndexList<OperationRequest> getReceivedMessages() {
+        return receivedMessages;
+    }
+
     public void handleOperationRequest(OperationRequest operationRequest) {
         if (operationRequest instanceof StrongOperationRequest) {
             StrongOperationRequest strongOperationRequest = (StrongOperationRequest) operationRequest;
             cab.cabCast(strongOperationRequest.getUuid(), strongOperationRequest.getPredicate());
         } else {
             receivedMessages.add(operationRequest);
+            cab.newMessageDelivered(receivedMessages);
         }
     }
 

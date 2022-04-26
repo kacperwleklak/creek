@@ -7,8 +7,10 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.integration.dsl.context.IntegrationFlowContext;
 import org.springframework.stereotype.Component;
 import pl.poznan.put.kacperwleklak.cab.CAB;
+import pl.poznan.put.kacperwleklak.cab.exception.CabCastException;
 import pl.poznan.put.kacperwleklak.message.CreekMsg;
 import pl.poznan.put.kacperwleklak.message.MessageUtils;
+import pl.poznan.put.kacperwleklak.message.impl.*;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
@@ -20,15 +22,14 @@ import java.util.function.Function;
 @Slf4j
 public class ReplicasMessagingService {
 
-    private List<IntegrationFlowContext.IntegrationFlowRegistration> replicas;
     private String leader;
     public boolean isLeader = false;
 
-    private List<String> replicasAddresses;
-    private String host;
-    private int port;
+    private final List<String> replicasAddresses;
+    private final String host;
+    private final int port;
 
-    private TcpService tcpService;
+    private final TcpService tcpService;
     private CAB cab;
 
     @Autowired
@@ -46,7 +47,6 @@ public class ReplicasMessagingService {
 
     @PostConstruct
     private void resolveReplicas() {
-        replicas = new ArrayList<>(replicasAddresses.size());
         for (String address : replicasAddresses) {
             String[] addrElements = address.split(":");
             String host = addrElements[0];
@@ -86,7 +86,23 @@ public class ReplicasMessagingService {
         return creekMsg -> log.info("ReplicasMessagingService, received: {}", creekMsg.toString());
     }
 
-    private Function<byte[], byte[]> messageHandler = bytes -> {
+    private final Function<CreekMsg, CreekMsg> messageHandler = creekMsg -> {
+        try {
+            if (creekMsg instanceof AckMessage) {
+                log.debug("ACK received!");
+            }
+            if (creekMsg instanceof CabAcceptMessage) {
+                return cab.acceptEventHandler((CabAcceptMessage) creekMsg);
+            }
+            if (creekMsg instanceof CabProposeMessage) {
+                return cab.proposeEventHandler((CabProposeMessage) creekMsg);
+            }
+            if (creekMsg instanceof CabBroadcastMessage) {
+                return cab.broadcastEventHandler((CabBroadcastMessage) creekMsg);
+            }
+        } catch (CabCastException e) {
+            return new ErrorMessage(e);
+        }
         return null;
     };
 

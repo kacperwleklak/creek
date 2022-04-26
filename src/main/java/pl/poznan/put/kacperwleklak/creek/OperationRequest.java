@@ -3,6 +3,7 @@ package pl.poznan.put.kacperwleklak.creek;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import pl.poznan.put.kacperwleklak.operation.CreekOperation;
 
 @Data
@@ -13,6 +14,8 @@ import pl.poznan.put.kacperwleklak.operation.CreekOperation;
 public class OperationRequest {
 
     private String uuid;
+    
+    @EqualsAndHashCode.Exclude
     private CreekOperation operation;
 
 }

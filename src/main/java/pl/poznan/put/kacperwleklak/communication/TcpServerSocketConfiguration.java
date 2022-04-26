@@ -12,11 +12,13 @@ import org.springframework.integration.ip.tcp.connection.AbstractServerConnectio
 import org.springframework.integration.ip.tcp.connection.TcpNetServerConnectionFactory;
 import org.springframework.integration.ip.tcp.serializer.ByteArrayCrLfSerializer;
 import org.springframework.messaging.MessageChannel;
+import org.springframework.scheduling.annotation.EnableAsync;
 
 @Slf4j
 @Configuration
 @EnableIntegration
 @IntegrationComponentScan
+@EnableAsync
 public class TcpServerSocketConfiguration {
 
     private final int port;

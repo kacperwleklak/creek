@@ -4,8 +4,10 @@ import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import lombok.Getter;
 import pl.poznan.put.kacperwleklak.cab.predicate.impl.AreMessagesDelivered;
+import pl.poznan.put.kacperwleklak.creek.OperationRequest;
 import pl.poznan.put.kacperwleklak.operation.impl.ReadCreekOperation;
 import pl.poznan.put.kacperwleklak.operation.impl.WriteCreekOperation;
+import pl.poznan.put.kacperwleklak.structure.IncrementalIndexList;
 
 import java.util.List;
 
@@ -22,5 +24,5 @@ public abstract class CabPredicate {
         this.predicateType = cabPredicateType;
     }
 
-    public abstract boolean isTrue(List<String> deliveredMessages);
+    public abstract boolean isTrue(IncrementalIndexList<OperationRequest> deliveredOperations);
 }

@@ -16,6 +16,9 @@ public class CabMessage {
         this.predicate = predicate;
     }
 
+    public CabMessage() {
+    }
+
     public String getMessageId() {
         return messageId;
     }

@@ -1,7 +1,6 @@
 package pl.poznan.put.kacperwleklak.cab.predicate;
 
 import lombok.Getter;
-import lombok.Setter;
 import pl.poznan.put.kacperwleklak.cab.predicate.impl.AreMessagesDelivered;
 
 public enum CabPredicateType {

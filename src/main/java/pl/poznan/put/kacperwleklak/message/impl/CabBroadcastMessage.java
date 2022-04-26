@@ -2,17 +2,15 @@ package pl.poznan.put.kacperwleklak.message.impl;
 
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import lombok.Getter;
-import lombok.NoArgsConstructor;
 import lombok.Setter;
 import lombok.ToString;
 import pl.poznan.put.kacperwleklak.cab.CabMessage;
 import pl.poznan.put.kacperwleklak.message.CreekMsg;
-import pl.poznan.put.kacperwleklak.message.CreekTypedMessage;
 import pl.poznan.put.kacperwleklak.message.MessageType;
 
 @ToString
 @JsonTypeName(CabBroadcastMessage.MESSAGE_TYPE)
-public class CabBroadcastMessage implements CreekTypedMessage {
+public class CabBroadcastMessage extends CreekMsg {
 
     public static final String MESSAGE_TYPE = "cabBroadcast";
 
@@ -24,18 +22,11 @@ public class CabBroadcastMessage implements CreekTypedMessage {
     private final MessageType messageType = MessageType.CAB_BROADCAST_MESSAGE;
 
     public CabBroadcastMessage(CabMessage cabMessage) {
+        super(MessageType.CAB_BROADCAST_MESSAGE);
         this.cabMessage = cabMessage;
     }
 
-    public CabBroadcastMessage() {}
-
-    @Override
-    public CreekMsg toCreekMsg() {
-        return new CreekMsg(getMessageType(), cabMessage);
-    }
-
-    public static CabBroadcastMessage from(CreekMsg creekMsg) {
-        CabMessage cabMessage = (CabMessage) creekMsg.getParameters()[1];
-        return new CabBroadcastMessage(cabMessage);
+    public CabBroadcastMessage() {
+        super(MessageType.CAB_BROADCAST_MESSAGE);
     }
 }

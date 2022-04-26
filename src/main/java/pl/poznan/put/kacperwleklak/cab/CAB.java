@@ -8,10 +8,13 @@ import pl.poznan.put.kacperwleklak.cab.predicate.CabPredicate;
 import pl.poznan.put.kacperwleklak.communication.MessageReceiver;
 import pl.poznan.put.kacperwleklak.communication.ReplicasMessagingService;
 import pl.poznan.put.kacperwleklak.creek.Creek;
+import pl.poznan.put.kacperwleklak.creek.OperationRequest;
 import pl.poznan.put.kacperwleklak.message.CreekMsg;
+import pl.poznan.put.kacperwleklak.message.impl.AckMessage;
 import pl.poznan.put.kacperwleklak.message.impl.CabAcceptMessage;
 import pl.poznan.put.kacperwleklak.message.impl.CabBroadcastMessage;
 import pl.poznan.put.kacperwleklak.message.impl.CabProposeMessage;
+import pl.poznan.put.kacperwleklak.operation.CreekOperation;
 import pl.poznan.put.kacperwleklak.structure.IncrementalIndexList;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class CAB {
 
-    private int sequenceNumber;
+    private final int sequenceNumber;
     private int nextIndexToDeliver;
     private final IncrementalIndexList<CabMessage> received;
     private final IncrementalIndexList<String> waitingToDeliver;
@@ -55,22 +58,23 @@ public class CAB {
         CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
         CabMessage cabMessage = new CabMessage(UUID, cabPredicate);
         cabBroadcastMessage.setCabMessage(cabMessage);
-        replicasMessagingService.sendMessage(MessageReceiver.LEADER, cabBroadcastMessage.toCreekMsg());
+        replicasMessagingService.sendMessage(MessageReceiver.LEADER, cabBroadcastMessage);
     }
 
-    public void broadcastEventHandler(CreekMsg creekMsg) throws CabCastException {
+    //upon BroadcastMessage(UUIDm, q)
+    public CreekMsg broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) throws CabCastException {
         if (!isLeader) {
             throw new CabCastException("Unable to broadcast message. Not a leader!");
         }
-        CabBroadcastMessage cabBroadcastMessage = CabBroadcastMessage.from(creekMsg);
         CabMessage cabMessage = cabBroadcastMessage.getCabMessage();
         int index = received.add(cabMessage);
         CabProposeMessage cabProposeMessage = new CabProposeMessage(cabMessage, index, sequenceNumber);
-        replicasMessagingService.broadcastMessage(cabProposeMessage.toCreekMsg());
+        replicasMessagingService.broadcastMessage(cabProposeMessage);
+        return new AckMessage();
     }
 
-    public void proposeEventHandler(CreekMsg creekMsg) throws CabCastException {
-        CabProposeMessage cabProposeMessage = CabProposeMessage.from(creekMsg);
+    //upon Propose(UUIDm, d, receivedSequenceNumber, q)
+    public CreekMsg proposeEventHandler(CabProposeMessage cabProposeMessage) throws CabCastException {
         if (cabProposeMessage.getSequenceNumber() != sequenceNumber) {
             throw new CabCastException("Received proposition with invalid sequence number");
         }
@@ -80,12 +84,12 @@ public class CAB {
         received.put(cabProposeMessage.getIndex(), cabProposeMessage.getCabMessage());
         CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getCabMessage().getMessageId(),
                 cabProposeMessage.getSequenceNumber());
-        replicasMessagingService.broadcastMessage(cabAcceptMessage.toCreekMsg());
+        replicasMessagingService.broadcastMessage(cabAcceptMessage);
+        return new AckMessage();
     }
 
-
-    public void acceptEventHandler(CreekMsg creekMsg) throws CabCastException {
-        CabAcceptMessage cabAcceptMessage = CabAcceptMessage.from(creekMsg);
+    //upon Accept(UUIDm, receivedSequenceNumber)
+    public CreekMsg acceptEventHandler(CabAcceptMessage cabAcceptMessage) throws CabCastException {
         if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
             throw new CabCastException("Received proposition with invalid sequence number");
         }
@@ -95,13 +99,25 @@ public class CAB {
         if (isMajority(currentAcceptsReceived)) {
             deliverMessage(messageID);
         }
+        return new AckMessage();
     }
 
-    private void deliverMessage(String messageID) {
+    //upon PredicateBecomesTrue - check if any predicate becomes true due to creek message deliver
+    public synchronized void newMessageDelivered(IncrementalIndexList<OperationRequest> operations) {
+        CabMessage nextToBeDelivered = received.get(nextIndexToDeliver);
+        if (nextToBeDelivered == null) {
+            return;
+        }
+        if (nextToBeDelivered.getPredicate().isTrue(operations)) {
+            deliverMessage(nextToBeDelivered.getMessageId());
+        }
+    }
+
+    private synchronized void deliverMessage(String messageID) {
         int index = received.indexOf(new CabMessage(messageID, null));
         if (index == nextIndexToDeliver) {
             CabMessage cabMessage = received.get(index);
-            if (cabMessage.getPredicate().isTrue(null)) {
+            if (cabMessage.getPredicate().isTrue(creek.getReceivedMessages())) {
                 cabDeliver(messageID);
                 nextIndexToDeliver++;
                 if (waitingToDeliver.get(nextIndexToDeliver) != null) {
@@ -111,8 +127,7 @@ public class CAB {
             } else {
                 waitingToDeliver.put(index, messageID);
             }
-        }
-        else if (index > nextIndexToDeliver) {
+        } else if (index > nextIndexToDeliver) {
             waitingToDeliver.put(index, messageID);
         }
     }

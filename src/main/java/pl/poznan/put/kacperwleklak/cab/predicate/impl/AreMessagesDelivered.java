@@ -6,8 +6,11 @@ import lombok.Getter;
 import lombok.Setter;
 import pl.poznan.put.kacperwleklak.cab.predicate.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.predicate.CabPredicateType;
+import pl.poznan.put.kacperwleklak.creek.OperationRequest;
+import pl.poznan.put.kacperwleklak.structure.IncrementalIndexList;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 @JsonTypeName(AreMessagesDelivered.PREDICATE_NAME)
 public class AreMessagesDelivered extends CabPredicate {
@@ -23,7 +26,10 @@ public class AreMessagesDelivered extends CabPredicate {
     }
 
     @Override
-    public boolean isTrue(List<String> deliveredMessages) {
-        return true;
+    public boolean isTrue(IncrementalIndexList<OperationRequest> deliveredOperations) {
+        return deliveredOperations.stream()
+                .map(OperationRequest::getUuid)
+                .collect(Collectors.toList())
+                .containsAll(messagesMustBeDelivered);
     }
 }

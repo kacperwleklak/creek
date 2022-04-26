@@ -1,6 +1,9 @@
 package pl.poznan.put.kacperwleklak.structure;
 
+import pl.poznan.put.kacperwleklak.creek.OperationRequest;
+
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 public class IncrementalIndexList<E> extends ConcurrentHashMap<Integer, E> {
 
@@ -28,5 +31,9 @@ public class IncrementalIndexList<E> extends ConcurrentHashMap<Integer, E> {
                 .findFirst()
                 .map(Entry::getKey)
                 .orElse(-1);
+    }
+
+    public Stream<E> stream() {
+        return values().stream();
     }
 }

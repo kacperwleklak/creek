@@ -6,9 +6,9 @@ services:
       - "8081:8080"     # used for internal TCP communication between replicas
       - "10001:10001"   # used for HTTP interface for testing purposes
     environment:
-      - COMMUNICATION_REPLICAS_PORT = 10001
-      - SERVER_PORT = 8080
-      - COMMUNICATION_REPLICAS_NODES = localhost:10001,localhost:10002,localhost:10003,localhost:10004
+      - COMMUNICATION_REPLICAS_PORT=10001
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004
         # Please pay attention to the order of the replicas. COMMUNICATION_REPLICAS_NODES addresses should be ordered in
         # the same way for each replica, because the first one is recognized as the leader (which should be the same
         # for all replicas).
@@ -18,9 +18,9 @@ services:
       - "8082:8080"     # used for internal TCP communication between replicas
       - "10002:10002"   # used for HTTP interface for testing purposes
     environment:
-      - COMMUNICATION_REPLICAS_PORT = 10002
-      - SERVER_PORT = 8080
-      - COMMUNICATION_REPLICAS_NODES = localhost:10001,localhost:10002,localhost:10003,localhost:10004
+      - COMMUNICATION_REPLICAS_PORT=10002
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004
 
   replica3:
     build: .
@@ -28,9 +28,9 @@ services:
       - "8083:8080"     # used for internal TCP communication between replicas
       - "10003:10003"   # used for HTTP interface for testing purposes
     environment:
-      - COMMUNICATION_REPLICAS_PORT = 10003
-      - SERVER_PORT = 8080
-      - COMMUNICATION_REPLICAS_NODES = localhost:10001,localhost:10002,localhost:10003,localhost:10004
+      - COMMUNICATION_REPLICAS_PORT=10003
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004
 
   replica4:
     build: .
@@ -38,6 +38,6 @@ services:
       - "8084:8080"     # used for internal TCP communication between replicas
       - "10004:10004"   # used for HTTP interface for testing purposes
     environment:
-      - COMMUNICATION_REPLICAS_PORT = 10004
-      - SERVER_PORT = 8080
-      - COMMUNICATION_REPLICAS_NODES = localhost:10001,localhost:10002,localhost:10003,localhost:10004
+      - COMMUNICATION_REPLICAS_PORT=10004
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004

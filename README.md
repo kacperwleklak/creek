@@ -9,7 +9,7 @@ Recommended way of running this project is to use provided docker-compose file.
 docker-compose up -d
 ```
 It is also possible to run each replica from sources using
-`pl.poznan.put.kacperwleklak.CreekApplication` as a main class, but you need to remember
+`pl.poznan.put.kacperwleklak.creek.CreekApplicationRunner` as a main class, but you need to remember
 about providing environment variables (see `docker-compose.yml` file and)
 
 ## 💻 Usage

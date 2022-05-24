@@ -23,6 +23,18 @@ public class MessageUtils {
         return toAddressString(myHost(), myPort());
     }
 
+    public static String hostFromAddressString(String address) {
+        return address.split(":")[0];
+    }
+
+    public static int portFromAddressString(String address) {
+        try {
+            return Integer.parseInt(address.split(":")[1]);
+        } catch (IndexOutOfBoundsException ioobe) {
+            return -1;
+        }
+    }
+
     public static String toAddressString(String host, int port) {
         return host + ":" + port;
     }

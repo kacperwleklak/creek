@@ -4,12 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
 import javax.annotation.PostConstruct;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 @Service
@@ -18,26 +21,27 @@ public class ReliableChannelImpl implements ReliableChannel {
 
     private final List<String> replicasAddresses;
 
-    private final TcpService tcpService;
+    private final TcpServerSocket serverSocket;
     private final List<ReliableChannelDeliverListener> listeners;
+    private final Map<String, TcpClientSocket> connections;
 
     @Autowired
     public ReliableChannelImpl(@Value("${communication.replicas.nodes}") List<String> replicasAddresses,
-                               TcpService tcpService) {
+                               TcpServerSocket serverSocket) {
         this.replicasAddresses = replicasAddresses;
-        this.tcpService = tcpService;
+        this.serverSocket = serverSocket;
         this.listeners = new ArrayList<>();
+        this.connections = new HashMap<>();
     }
 
     @PostConstruct
-    private void resolveReplicas() {
+    private void registerHandler() {
         for (String address : replicasAddresses) {
-            String[] addrElements = address.split(":");
-            String host = addrElements[0];
-            int port = Integer.parseInt(addrElements[1]);
-            tcpService.registerNewServer(host, port, address);
+            String host = MessageUtils.hostFromAddressString(address);
+            int port = MessageUtils.portFromAddressString(address);
+            connections.put(address, new TcpClientSocket(host, port));
         }
-        tcpService.registerMessageHandler(getMessageConsumer());
+        serverSocket.registerConsumer(getMessageConsumer());
     }
 
     private Consumer<byte[]> getMessageConsumer() {
@@ -46,12 +50,19 @@ public class ReliableChannelImpl implements ReliableChannel {
 
     @Override
     public void rbCast(byte[] msg) {
-        tcpService.broadcastMessage(msg);
+        connections.values().forEach(replica -> replica.sendMessage(msg));
     }
 
     @Override
     public void rbSend(String address, byte[] msg) {
-        tcpService.sendMessage(address, msg);
+        TcpClientSocket tcpClientSocket = connections.get(address);
+        if (tcpClientSocket == null) {
+            String host = MessageUtils.hostFromAddressString(address);
+            int port = MessageUtils.portFromAddressString(address);
+            tcpClientSocket = new TcpClientSocket(host, port);
+            connections.put(address, tcpClientSocket);
+        }
+        tcpClientSocket.sendMessage(msg);
     }
 
     @Override

@@ -3,12 +3,10 @@ package pl.poznan.put.kacperwleklak.cab.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
-import pl.poznan.put.kacperwleklak.cab.CAB;
-import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
-import pl.poznan.put.kacperwleklak.cab.CabPredicate;
-import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
+import pl.poznan.put.kacperwleklak.cab.*;
 import pl.poznan.put.kacperwleklak.cab.message.CabMsg;
 import pl.poznan.put.kacperwleklak.cab.message.impl.CabAcceptMessage;
 import pl.poznan.put.kacperwleklak.cab.message.impl.CabBroadcastMessage;
@@ -22,8 +20,9 @@ import javax.annotation.PostConstruct;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Component
 @Slf4j
+@Component
+@DependsOn({"messageUtils"})
 public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicateCallback {
 
     // state holders
@@ -33,8 +32,8 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
 
     // message holders
     private final IncrementalIndexList<CabMessage> received;
-    private final IncrementalIndexList<UUID> waitingToDeliver;
-    private final ConcurrentHashMap<UUID, Integer> acceptsReceived;
+    private final IncrementalIndexList<CabMessageID> waitingToDeliver;
+    private final ConcurrentHashMap<CabMessageID, Integer> acceptsReceived;
 
     private boolean isLeader = false;
     private String leaderAddr;
@@ -73,14 +72,15 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
     }
 
     @Override
-    public void cabCast(UUID msgId, int predicateId) {
-        CabMessage cabMessage = new CabMessage(msgId, predicateId);
+    public void cabCast(CabMessageID messageID, int predicateId) {
+        CabMessage cabMessage = new CabMessage(messageID, predicateId);
         CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage(cabMessage);
-        reliableChannel.rbSend(leaderAddr, SerializationUtils.serialize(cabBroadcastMessage));
+        reliableChannel.rSend(leaderAddr, SerializationUtils.serialize(cabBroadcastMessage));
     }
 
     //upon BroadcastMessage(UUIDm, q)
     public void broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) {
+        log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
         if (!isLeader) {
             log.error("Unable to broadcast message. Not a leader!");
             return;
@@ -93,6 +93,7 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
 
     //upon Propose(UUIDm, d, receivedSequenceNumber, q)
     public void proposeEventHandler(CabProposeMessage cabProposeMessage)  {
+        log.debug("Received CabProposeMessage: {}", cabProposeMessage);
         if (cabProposeMessage.getSequenceNumber() != sequenceNumber) {
             log.error("Received proposition with invalid sequence number");
             return;
@@ -102,18 +103,19 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
             return;
         }
         received.put(cabProposeMessage.getIndex(), cabProposeMessage.getCabMessage());
-        CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getCabMessage().getMessageId(),
+        CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getCabMessage().getMessageID(),
                 cabProposeMessage.getSequenceNumber());
         broadcast(cabAcceptMessage);
     }
 
     //upon Accept(UUIDm, receivedSequenceNumber)
     public void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
+        log.debug("Received CabAcceptMessage: {}", cabAcceptMessage);
         if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
            log.error("Received proposition with invalid sequence number");
             return;
         }
-        UUID messageID = cabAcceptMessage.getUuid();
+        CabMessageID messageID = cabAcceptMessage.getMessageID();
         acceptsReceived.putIfAbsent(messageID, 0);
         Integer currentAcceptsReceived = acceptsReceived.computeIfPresent(messageID, (key, value) -> value + 1);
         if (isMajority(currentAcceptsReceived)) {
@@ -123,14 +125,14 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
 
     private boolean isPredicateTrue(CabMessage cabMessage) {
         CabPredicate cabPredicate = predicates.get(cabMessage.getPredicateId());
-        return cabPredicate.testAsync(cabMessage.getMessageId(), this);
+        return cabPredicate.testAsync(cabMessage.getMessageID(), this);
     }
 
     private void broadcast(CabMsg cabMsg) {
-        reliableChannel.rbCast(SerializationUtils.serialize(cabMsg));
+        reliableChannel.rCast(SerializationUtils.serialize(cabMsg));
     }
 
-    private synchronized void deliverMessage(UUID messageID) {
+    private synchronized void deliverMessage(CabMessageID messageID) {
         int index = received.indexOf(new CabMessage(messageID));
         if (index == nextIndexToDeliver) {
             CabMessage cabMessage = received.get(index);
@@ -138,7 +140,7 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
                 cabDeliver(messageID);
                 nextIndexToDeliver++;
                 if (waitingToDeliver.get(nextIndexToDeliver) != null) {
-                    UUID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
+                    CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
                     deliverMessage(removedMessageIndex);
                 }
             } else {
@@ -149,24 +151,24 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
         }
     }
 
-    private void cabDeliver(UUID messageID) {
+    private void cabDeliver(CabMessageID messageID) {
         listeners.forEach(cabDeliverListener -> cabDeliverListener.cabDelver(messageID));
     }
 
     private boolean isMajority(int replicasAcceptedNumber) {
-        return replicasAcceptedNumber >= (replicasNumber * 0.5);
+        return replicasAcceptedNumber > (replicasNumber * 0.5);
     }
 
     //upon PredicateBecomesTrue - check if any predicate becomes true due to creek message deliver
     @Override
-    public synchronized void predicateBecomesTrue(int predicateId, UUID msg) {
+    public synchronized void predicateBecomesTrue(int predicateId, CabMessageID msg) {
         CabMessage nextToBeDelivered = received.get(nextIndexToDeliver);
         if (nextToBeDelivered == null) {
             return;
         }
-        UUID nextToBeDeliveredUUID = nextToBeDelivered.getMessageId();
-        if (msg.equals(nextToBeDeliveredUUID)) {
-            deliverMessage(nextToBeDeliveredUUID);
+        CabMessageID nextToBeDeliveredID = nextToBeDelivered.getMessageID();
+        if (msg.equals(nextToBeDeliveredID)) {
+            deliverMessage(nextToBeDeliveredID);
         }
     }
 
@@ -181,7 +183,7 @@ public class CabImpl implements CAB, ReliableChannelDeliverListener, CabPredicat
     }
 
     @Override
-    public void rbDeliver(byte[] msg) {
+    public void rDeliver(byte[] msg) {
         Object deserialized = SerializationUtils.deserialize(msg);
         if (deserialized instanceof CabAcceptMessage) {
             acceptEventHandler((CabAcceptMessage) deserialized);

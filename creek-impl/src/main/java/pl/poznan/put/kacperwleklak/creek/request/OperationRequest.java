@@ -1,4 +1,4 @@
-package pl.poznan.put.kacperwleklak.creek.requests;
+package pl.poznan.put.kacperwleklak.creek.request;
 
 import lombok.Data;
 

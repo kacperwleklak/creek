@@ -2,21 +2,27 @@ package pl.poznan.put.kacperwleklak.common.utils;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
-@Component
+@Component("messageUtils")
 public class MessageUtils {
 
-    private static String HOST;
-    private static int PORT;
+    @Value("${communication.replicas.host}")
+    private String host;
+    @Value("${communication.replicas.port}")
+    private int port;
+
+    private static String HOST_STATIC;
+    private static int PORT_STATIC;
 
     @Value("${communication.replicas.host}")
     public void setHostStatic(String host){
-        HOST = host;
+        MessageUtils.HOST_STATIC = host;
     }
 
     @Value("${communication.replicas.port}")
     public void setPortStatic(int port){
-        PORT = port;
+        MessageUtils.PORT_STATIC = port;
     }
 
     public static String myAddress() {
@@ -40,10 +46,10 @@ public class MessageUtils {
     }
 
     public static String myHost() {
-        return HOST;
+        return MessageUtils.HOST_STATIC;
     }
 
     public static int myPort() {
-        return PORT;
+        return MessageUtils.PORT_STATIC;
     }
 }

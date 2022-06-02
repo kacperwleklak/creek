@@ -45,16 +45,16 @@ public class ReliableChannelImpl implements ReliableChannel {
     }
 
     private Consumer<byte[]> getMessageConsumer() {
-        return message -> listeners.forEach(listener -> listener.rbDeliver(message));
+        return message -> listeners.forEach(listener -> listener.rDeliver(message));
     }
 
     @Override
-    public void rbCast(byte[] msg) {
+    public void rCast(byte[] msg) {
         connections.values().forEach(replica -> replica.sendMessage(msg));
     }
 
     @Override
-    public void rbSend(String address, byte[] msg) {
+    public void rSend(String address, byte[] msg) {
         TcpClientSocket tcpClientSocket = connections.get(address);
         if (tcpClientSocket == null) {
             String host = MessageUtils.hostFromAddressString(address);

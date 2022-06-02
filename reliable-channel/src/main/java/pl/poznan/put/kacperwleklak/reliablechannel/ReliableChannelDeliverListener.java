@@ -1,5 +1,5 @@
 package pl.poznan.put.kacperwleklak.reliablechannel;
 
 public interface ReliableChannelDeliverListener {
-    void rbDeliver(byte[] msg);
+    void rDeliver(byte[] msg);
 }

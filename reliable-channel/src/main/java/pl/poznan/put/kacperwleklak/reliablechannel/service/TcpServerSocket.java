@@ -20,10 +20,10 @@ import java.util.function.Consumer;
 @Service
 public class TcpServerSocket {
 
-    private Selector selector;
-    private ServerSocketChannel serverSocket;
-    private ByteBuffer buffer;
-    private Thread acceptorThread;
+    private final Selector selector;
+    private final ServerSocketChannel serverSocket;
+    private final ByteBuffer buffer;
+    private final Thread acceptorThread;
     private Consumer<byte[]> messageConsumer;
 
     public TcpServerSocket(@Value("${communication.replicas.port}") int port) throws IOException {
@@ -41,7 +41,7 @@ public class TcpServerSocket {
         messageConsumer = consumer;
     }
 
-    private Runnable incomingConnectionsAcceptor = new Runnable() {
+    private final Runnable incomingConnectionsAcceptor = new Runnable() {
         @Override
         public void run() {
             log.info("Running TcpServerSocket...");

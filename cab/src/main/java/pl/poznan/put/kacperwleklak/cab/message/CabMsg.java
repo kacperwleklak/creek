@@ -9,7 +9,7 @@ import java.io.Serializable;
 public abstract class CabMsg implements Serializable {
 
     @Getter
-    private Sender sender;
+    private final Sender sender;
 
     public CabMsg() {
         this.sender = new Sender(MessageUtils.myHost(), MessageUtils.myPort());

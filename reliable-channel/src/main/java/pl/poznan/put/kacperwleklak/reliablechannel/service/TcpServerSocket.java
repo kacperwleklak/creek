@@ -26,10 +26,11 @@ public class TcpServerSocket {
     private final Thread acceptorThread;
     private Consumer<byte[]> messageConsumer;
 
-    public TcpServerSocket(@Value("${communication.replicas.port}") int port) throws IOException {
+    public TcpServerSocket(@Value("${communication.replicas.port}") int port,
+                           @Value("${communication.replicas.host}") String host) throws IOException {
         selector = Selector.open();
         serverSocket = ServerSocketChannel.open();
-        serverSocket.bind(new InetSocketAddress("localhost", port));
+        serverSocket.bind(new InetSocketAddress(host, port));
         serverSocket.configureBlocking(false);
         serverSocket.register(selector, SelectionKey.OP_ACCEPT);
         buffer = ByteBuffer.allocate(2048);

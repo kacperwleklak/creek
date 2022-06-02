@@ -1,5 +1,6 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
+import lombok.Data;
 import org.mvel2.MVEL;
 import pl.poznan.put.kacperwleklak.creek.structure.DifferentialTreeMap;
 import pl.poznan.put.kacperwleklak.creek.structure.Request;
@@ -9,6 +10,7 @@ import java.util.Map;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
+@Data
 public class StateObject {
 
     private DifferentialTreeMap<String, Object> db;

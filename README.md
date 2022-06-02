@@ -4,56 +4,57 @@ Diploma thesis - Implementation and performance evaluation of the Creek replicat
 
 ## 🏃 Running project
 
-Recommended way of running this project is to use provided docker-compose file.
+#### Recommended
+Open this directory in terminal and run following commands:
+
+1. Create network
+```shell
+docker network create creek_network
+```
+
+2. Build docker image
+```shell
+docker build -t kacperwleklak/creek .
+```
+
+3. Run cluster of nodes
 ```shell
 docker-compose up -d
 ```
+
+#### Alternative
 It is also possible to run each replica from sources using
 `pl.poznan.put.kacperwleklak.creek.CreekApplicationRunner` as a main class, but you need to remember
 about providing environment variables (see `docker-compose.yml` file and)
 
 ## 💻 Usage
 
-### Weak message example
+#### Message example
 ```shell
 curl --location --request POST 'http://localhost:8082/' \
 --header 'Content-Type: application/json' \
 --data-raw '{
-    "uuid": "123",
-    "operation": {
-        "operationType": "read",
-        "key": "x"
-    }
+    "operation": "s=3;x=5;y=s+x",
+    "strong": true
 }'
 ```
-Please note that current implementation of Creek protocol does not feature weak messages
-broadcast. So, if You want to deliver this message to all the replicas, You need to manually
-send the message to each one.
+Read the docs for operation syntax: [Mvel documentation](http://mvel.documentnode.com/)
 
-They are some types of predefined operation types, but their behaviour is not implemented
-yet.
-
-### Strong message example
+#### Temporary test endpoints:
+Returns StateObject
 ```shell
-curl --location --request POST 'http://localhost:8082/' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "uuid": "123456",
-    "operation": {
-        "operationType": "read",
-        "key": "x"
-    },
-    "predicate": {
-        "predicateType": "ARE_MESSAGES_DELIVERED",
-        "messagesMustBeDelivered": ["123", "456"]
-    }
-}'
+curl --location --request GET 'http://localhost:8082/state'
 ```
-This is an example of strong operation, which will be delivered after meeting specified condition
-(predicate).
+
+Returns list of responses to clients.
+```shell
+curl --location --request GET 'http://localhost:8082/responses'
+```
+
 
 ## 📝 TODO-list
 * CAB module:
   * Waiting with ACCEPT until predicate Q becomes true
 * Creek module:
-  * To implement
+  * SQL statements parsing
+  * Client interface with request response

@@ -190,7 +190,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
             Response response = reqsAwaitingResp.get(strongOpsToCheckRequest);
             if (response != null && executed.contains(strongOpsToCheckRequest)) {
-                response.send();
+                responseToClient(request, response);
                 reqsAwaitingResp.remove(strongOpsToCheckRequest);
             }
         });

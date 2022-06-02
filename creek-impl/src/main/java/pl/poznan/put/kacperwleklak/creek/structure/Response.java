@@ -8,6 +8,4 @@ import lombok.Data;
 public class Response {
 
     private Object responseObj;
-
-    public void send() {};
 }

@@ -1,6 +1,7 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
@@ -8,14 +9,19 @@ import org.springframework.util.SerializationUtils;
 import pl.poznan.put.kacperwleklak.cab.*;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
+import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
+import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
 import pl.poznan.put.kacperwleklak.creek.message.CreekMsg;
 import pl.poznan.put.kacperwleklak.creek.message.impl.OperationRequestMessage;
+import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
 import pl.poznan.put.kacperwleklak.creek.structure.Request;
-import pl.poznan.put.kacperwleklak.creek.structure.Response;
+import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
+import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
 import javax.annotation.PostConstruct;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -24,7 +30,7 @@ import java.util.stream.Stream;
 @Slf4j
 @Component
 @DependsOn({"messageUtils"})
-public class Creek implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate {
+public class Creek implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
 
     private static final int PREDICATE_ID = 1;
 
@@ -37,7 +43,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private List<Request> executed;
     private List<Request> toBeExecuted;
     private List<Request> toBeRolledBack;
-    private final Map<Request, Response> reqsAwaitingResp;
+    private final Map<Request, ResponseHandler> reqsAwaitingResp;
     private final Set<Request> missingContextOps;
     private final StateObject state;
     private final HashMap<Request.EventID, CabPredicateCallback> callbackMap;
@@ -46,12 +52,10 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private final CAB cab;
     private final ReliableChannel reliableChannel;
 
-    // temporary
-    private final Map<Request, Response> responsesMap;
-
+    private final Server pgServer;
 
     @Autowired
-    public Creek(CAB cab, ReliableChannel reliableChannel) {
+    public Creek(CAB cab, ReliableChannel reliableChannel) throws SQLException {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
@@ -61,25 +65,31 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.toBeRolledBack = new ArrayList<>();
         this.reqsAwaitingResp = new HashMap<>();
         this.missingContextOps = new HashSet<>();
-        this.state = new StateObject();
         this.callbackMap = new HashMap<>();
 
         this.cab = cab;
         this.reliableChannel = reliableChannel;
-
-        this.responsesMap = new HashMap<>();
+        PostgresServer postgresServer = new PostgresServer(this);
+        this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists");
+        this.state = new StateObject(postgresServer);
     }
 
     @PostConstruct
-    public void postInitialization() {
+    public void postInitialization() throws SQLException {
         reliableChannel.registerListener(this);
         this.replicaId = MessageUtils.myAddress();
         cab.registerListener(this);
         cab.start(Map.of(PREDICATE_ID, this));
+        pgServer.start();
+    }
+
+    @Override
+    public void executeOperation(String queryString, CreekClient client) {
+        invoke(queryString, false, client);
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
-    public void invoke(String operation, boolean isStrong) {
+    public void invoke(String operation, boolean isStrong, CreekClient client) {
         currentEventNumber++;
         Request.EventID eventID = new Request.EventID(replicaId, currentEventNumber);
         Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -92,10 +102,10 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             request.setCasualCtx(CollectionUtils.differenceToSet(casualCtx, tentativeGreaterThanCurrentRequest));
             cab.cabCast(request.getRequestID(), 1);
         }
+        reqsAwaitingResp.put(request, new ResponseHandler(client));
         casualCtx.add(eventID);
-        broadcast(new OperationRequestMessage(request));
         insertIntoTentative(request);
-        reqsAwaitingResp.put(request, null);
+        broadcast(new OperationRequestMessage(request));
     }
 
     @Override
@@ -188,9 +198,9 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
                 .collect(Collectors.toList());
         strongOpsToCheck.add(request);
         strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
-            Response response = reqsAwaitingResp.get(strongOpsToCheckRequest);
-            if (response != null && executed.contains(strongOpsToCheckRequest)) {
-                responseToClient(request, response);
+            ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
+            if (responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
+                responseToClient(request, responseHandler);
                 reqsAwaitingResp.remove(strongOpsToCheckRequest);
             }
         });
@@ -244,8 +254,20 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private void responseToClient(Request request, Response response) {
-        // temporary solution - publishing list of responses
-        responsesMap.put(request, response);
+        ResponseHandler responseHandler = reqsAwaitingResp.get(request);
+        responseHandler.setResponse(response);
+        responseToClient(request, responseHandler);
+    }
+
+    private void responseToClient(Request request, ResponseHandler responseHandler) {
+        responseHandler.sendResponse();
+    }
+
+    private ResponseHandler updateReqsAwaitingResponse(Request request, Response response) {
+        ResponseHandler responseHandler = reqsAwaitingResp.get(request);
+        responseHandler.setResponse(response);
+        reqsAwaitingResp.put(request, responseHandler);
+        return responseHandler;
     }
 
 
@@ -268,8 +290,8 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
                         responseToClient(request, response);
                         reqsAwaitingResp.remove(request);
                     } else if (tentative.contains(request)) {
-                        reqsAwaitingResp.put(request, response);
-                        responseToClient(request, response);
+                        ResponseHandler responseHandler = updateReqsAwaitingResponse(request, response);
+                        responseToClient(request, responseHandler);
                     } else {
                         responseToClient(request, response);
                         reqsAwaitingResp.remove(request);
@@ -289,9 +311,5 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     public StateObject getStateObject() {
         return state;
-    }
-
-    public Map<Request, Response> getResponsesMap() {
-        return responsesMap;
     }
 }

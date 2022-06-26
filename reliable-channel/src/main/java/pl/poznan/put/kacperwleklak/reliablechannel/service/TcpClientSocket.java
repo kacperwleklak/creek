@@ -13,7 +13,7 @@ import java.nio.channels.SocketChannel;
 public class TcpClientSocket {
 
     private SocketChannel client;
-    private final ByteBuffer buffer;
+    private ByteBuffer buffer;
 
     @Getter @Setter private String host;
     @Getter @Setter private int port;
@@ -29,7 +29,7 @@ public class TcpClientSocket {
             if (client == null) {
                 openConnection();
             }
-            ByteBuffer buffer = ByteBuffer.wrap(message);
+            buffer = ByteBuffer.wrap(message);
             client.write(buffer);
             buffer.clear();
         } catch (IOException e) {

@@ -3,6 +3,7 @@ package pl.poznan.put.kacperwleklak.creek.service;
 import lombok.extern.slf4j.Slf4j;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
 import org.springframework.util.SerializationUtils;
@@ -55,7 +56,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private final Server pgServer;
 
     @Autowired
-    public Creek(CAB cab, ReliableChannel reliableChannel) throws SQLException {
+    public Creek(CAB cab, ReliableChannel reliableChannel, @Value("${postgres.port}") String pgPort) throws SQLException {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
@@ -70,7 +71,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.cab = cab;
         this.reliableChannel = reliableChannel;
         PostgresServer postgresServer = new PostgresServer(this);
-        this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists");
+        this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
         this.state = new StateObject(postgresServer);
     }
 

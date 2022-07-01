@@ -4,6 +4,7 @@ import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.h2.api.ErrorCode;
+import org.h2.command.Command;
 import org.h2.command.CommandInterface;
 import org.h2.engine.*;
 import org.h2.message.DbException;
@@ -15,7 +16,6 @@ import org.h2.util.DateTimeUtils;
 import org.h2.util.ScriptReader;
 import org.h2.util.StringUtils;
 import org.h2.value.*;
-import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
 import pl.poznan.put.kacperwleklak.creek.structure.DifferentialTreeMap;
 import pl.poznan.put.kacperwleklak.creek.structure.Request;
@@ -35,8 +35,9 @@ import java.util.regex.Pattern;
 @Slf4j
 public class StateObject {
 
-    private DifferentialTreeMap<String, Object> db;
-    private SortedMap<Request, Map<String, Object>> undoLog;
+    private static final String DB_NAME = System.getenv("DBNAME");
+
+    private SortedMap<Request, Long> undoLog;
 
     // H2 Logic
     private SessionLocal session;
@@ -46,7 +47,6 @@ public class StateObject {
     private static final Pattern SHOULD_QUOTE = Pattern.compile(".*[\",\\\\{}].*");
 
     public StateObject(PostgresServer pgServer) {
-        db = new DifferentialTreeMap<>();
         undoLog = new TreeMap<>();
         this.pgServer = pgServer;
         session = initSession();
@@ -54,8 +54,6 @@ public class StateObject {
     }
 
     public synchronized void rollback(Request request) {
-        Map<String, Object> undoMap = undoLog.get(request);
-        db.putAll(undoMap);
         undoLog.remove(request);
     }
 
@@ -64,6 +62,8 @@ public class StateObject {
         Response response = new Response();
         String operation = request.getOperation();
         ScriptReader reader = new ScriptReader(new StringReader(operation));
+        long version = bumpVersion();
+        undoLog.put(request, version);
         while (true) {
             String s = reader.readStatement();
             if (s == null) {
@@ -94,6 +94,13 @@ public class StateObject {
         return response;
     }
 
+    private long bumpVersion() {
+        Command command = session.prepareLocal("SELECT nextval('global_version');");
+        ResultInterface resultInterface = command.executeQuery(0, false);
+        resultInterface.next();
+        return resultInterface.currentRow()[0].getLong();
+    }
+
     /*
         SQL Logic below
      */
@@ -102,7 +109,7 @@ public class StateObject {
         info.put("MODE", "PostgreSQL");
         info.put("DATABASE_TO_LOWER", "TRUE");
         info.put("DEFAULT_NULL_ORDERING", "HIGH");
-        String url = "jdbc:h2:./creek" + MessageUtils.myPort();
+        String url = "jdbc:h2:./" + DB_NAME + ";AUTO_SERVER=TRUE";
         ConnectionInfo ci = new ConnectionInfo(url, info, "sa", "password");
         ci.setProperty("FORBID_CREATION", "FALSE");
         return Engine.createSession(ci);

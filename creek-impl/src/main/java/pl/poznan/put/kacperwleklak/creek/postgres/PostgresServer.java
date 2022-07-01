@@ -121,7 +121,7 @@ public class PostgresServer implements Service {
      * @param s the message
      */
     void trace(String s) {
-        log.info(s);
+        log.trace(s);
     }
 
     /**
@@ -177,6 +177,9 @@ public class PostgresServer implements Service {
             }
         }
         port = serverSocket.getLocalPort();
+        log.info("Started Postgres Server at {}:{}",
+                NetUtils.getLocalAddress(),
+                serverSocket.getLocalPort());
     }
 
     @Override

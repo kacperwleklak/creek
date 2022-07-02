@@ -15,6 +15,7 @@ import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
 import pl.poznan.put.kacperwleklak.creek.message.CreekMsg;
 import pl.poznan.put.kacperwleklak.creek.message.impl.OperationRequestMessage;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
+import pl.poznan.put.kacperwleklak.creek.structure.Operation;
 import pl.poznan.put.kacperwleklak.creek.structure.Request;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
@@ -85,12 +86,12 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     @Override
-    public void executeOperation(String queryString, CreekClient client) {
-        invoke(queryString, false, client);
+    public void executeOperation(Operation operation, CreekClient client) {
+        invoke(operation, false, client);
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
-    public void invoke(String operation, boolean isStrong, CreekClient client) {
+    public void invoke(Operation operation, boolean isStrong, CreekClient client) {
         currentEventNumber++;
         Request.EventID eventID = new Request.EventID(replicaId, currentEventNumber);
         Request request = new Request(getCurrentTime(), eventID, operation, isStrong);

@@ -16,8 +16,10 @@ import org.h2.util.DateTimeUtils;
 import org.h2.util.ScriptReader;
 import org.h2.util.StringUtils;
 import org.h2.value.*;
+import pl.poznan.put.kacperwleklak.creek.postgres.PostgresClientThread;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
 import pl.poznan.put.kacperwleklak.creek.structure.DifferentialTreeMap;
+import pl.poznan.put.kacperwleklak.creek.structure.Operation;
 import pl.poznan.put.kacperwleklak.creek.structure.Request;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseMessageStream;
@@ -59,11 +61,23 @@ public class StateObject {
 
     @SneakyThrows
     public synchronized Response execute(Request request) {
-        Response response = new Response();
-        String operation = request.getOperation();
-        ScriptReader reader = new ScriptReader(new StringReader(operation));
         long version = bumpVersion();
         undoLog.put(request, version);
+        Operation operation = request.getOperation();
+        switch (operation.getAction()) {
+            case EXECUTE:
+                return executePrepared(operation.getSql());
+            case QUERY:
+                return executeQuery(operation.getSql());
+            default:
+                throw new UnsupportedOperationException();
+        }
+
+    }
+
+    private Response executeQuery(String sqlString) throws IOException {
+        Response response = new Response();
+        ScriptReader reader = new ScriptReader(new StringReader(sqlString));
         while (true) {
             String s = reader.readStatement();
             if (s == null) {
@@ -91,6 +105,28 @@ public class StateObject {
             }
         }
         response.addMessage(sendReadyForQuery());
+        return response;
+    }
+
+    private Response executePrepared(String sqlString) throws Exception {
+        Response response = new Response();
+        try (CommandInterface command = session.prepareLocal(sqlString)) {
+            setActiveRequest(command);
+            if (command.isQuery()) {
+                try (ResultInterface result = command.executeQuery(0, false)) {
+                    while (result.next()) {
+                        response.addMessage(buildDataRowMessage(result, null));
+                    }
+                    response.addMessage(buildCommandCompleteMessage(command, 0));
+                }
+            } else {
+                response.addMessage(buildCommandCompleteMessage(command, command.executeUpdate(null).getUpdateCount()));
+            }
+        } catch (Exception e) {
+            response.addMessage(sendErrorOrCancelResponse(e));
+        } finally {
+            setActiveRequest(null);
+        }
         return response;
     }
 

@@ -33,7 +33,7 @@ public class TcpServerSocket {
         serverSocket.bind(new InetSocketAddress(host, port));
         serverSocket.configureBlocking(false);
         serverSocket.register(selector, SelectionKey.OP_ACCEPT);
-        buffer = ByteBuffer.allocate(2048);
+        buffer = ByteBuffer.allocate(65_536);
         acceptorThread = new Thread(incomingConnectionsAcceptor);
         acceptorThread.start();
     }

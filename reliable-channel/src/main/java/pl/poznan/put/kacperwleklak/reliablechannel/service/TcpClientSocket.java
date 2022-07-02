@@ -21,7 +21,7 @@ public class TcpClientSocket {
     public TcpClientSocket(String host, int port) {
         this.host = host;
         this.port = port;
-        buffer = ByteBuffer.allocate(2048);
+        buffer = ByteBuffer.allocate(65_536);
     }
 
     public void sendMessage(byte[] message) {

@@ -17,11 +17,11 @@ public class Request implements Comparable<Request>, Serializable {
 
     private long timestamp;
     private EventID requestID;
-    private String operation;
+    private Operation operation;
     private boolean strong;
     private Set<EventID> casualCtx;
 
-    public Request(long timestamp, EventID requestID, String operation, boolean strong) {
+    public Request(long timestamp, EventID requestID, Operation operation, boolean strong) {
         this.timestamp = timestamp;
         this.requestID = requestID;
         this.operation = operation;

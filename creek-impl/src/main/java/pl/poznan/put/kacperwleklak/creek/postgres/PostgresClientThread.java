@@ -2,10 +2,7 @@ package pl.poznan.put.kacperwleklak.creek.postgres;
 
 import org.h2.api.ErrorCode;
 import org.h2.command.CommandInterface;
-import org.h2.engine.Constants;
-import org.h2.engine.Database;
-import org.h2.engine.SessionLocal;
-import org.h2.engine.SysProperties;
+import org.h2.engine.*;
 import org.h2.expression.ParameterInterface;
 import org.h2.message.DbException;
 import org.h2.result.ResultInterface;
@@ -16,6 +13,7 @@ import org.h2.util.*;
 import org.h2.value.*;
 import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
 import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
+import pl.poznan.put.kacperwleklak.creek.structure.Operation;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 
 import java.io.*;
@@ -25,10 +23,7 @@ import java.net.Socket;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
+import java.util.*;
 import java.util.regex.Pattern;
 
 public class PostgresClientThread implements Runnable, CreekClient {
@@ -242,6 +237,27 @@ public class PostgresClientThread implements Runnable, CreekClient {
             case 'p': {
                 server.trace("PasswordMessage");
                 try {
+                    Properties info = new Properties();
+                    info.put("MODE", "PostgreSQL");
+                    info.put("DATABASE_TO_LOWER", "TRUE");
+                    info.put("DEFAULT_NULL_ORDERING", "HIGH");
+                    String url = "jdbc:h2:./" + System.getenv("DBNAME");
+                    ConnectionInfo ci = new ConnectionInfo(url, info, "sa", "password");
+                    ci.setProperty("FORBID_CREATION", "FALSE");
+                    String baseDir = server.getBaseDir();
+                    if (baseDir == null) {
+                        baseDir = SysProperties.getBaseDir();
+                    }
+                    if (baseDir != null) {
+                        ci.setBaseDir(baseDir);
+                    }
+                    ci.setNetworkConnectionInfo(new NetworkConnectionInfo( //
+                            NetUtils.ipToShortForm(new StringBuilder("pg://"), //
+                                            socket.getLocalAddress().getAddress(), true) //
+                                    .append(':').append(socket.getLocalPort()).toString(), //
+                            socket.getInetAddress().getAddress(), socket.getPort(), null));
+                    session = Engine.createSession(ci);
+                    initDb();
                     sendAuthenticationOk();
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -383,22 +399,11 @@ public class PostgresClientThread implements Runnable, CreekClient {
                     sendErrorResponse("Portal not found: " + name);
                     break;
                 }
-                int maxRows = readInt();
                 Prepared prepared = p.prep;
                 CommandInterface prep = prepared.prep;
                 server.trace(prepared.sql);
-                try {
-                    setActiveRequest(prep);
-                    if (prep.isQuery()) {
-                        executeQuery(prepared, prep, p.resultColumnFormat, maxRows);
-                    } else {
-                        sendCommandComplete(prep, prep.executeUpdate(null).getUpdateCount());
-                    }
-                } catch (Exception e) {
-                    sendErrorOrCancelResponse(e);
-                } finally {
-                    setActiveRequest(null);
-                }
+                String query = buildParametrizedQuery(prepared.sql, prep.getParameters());
+                operationExecutor.executeOperation(new Operation(query, Operation.Action.EXECUTE), this);
                 break;
             }
             case 'S': {
@@ -409,7 +414,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             case 'Q': {
                 server.trace("Query");
                 String query = readString();
-                operationExecutor.executeOperation(query, this);
+                operationExecutor.executeOperation(new Operation(query, Operation.Action.QUERY), this);
                 break;
             }
             case 'X': {
@@ -421,6 +426,13 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 server.trace("Unsupported: " + x + " (" + (char) x + ")");
                 break;
         }
+    }
+
+    private String buildParametrizedQuery(String sql, ArrayList<? extends ParameterInterface> parameters) {
+        for (ParameterInterface parameter : parameters) {
+            sql = sql.replaceFirst("\\$[0-9]+", parameter.getParamValue().toString());
+        }
+        return sql;
     }
 
     private void executeQuery(Prepared prepared, CommandInterface prep, int[] resultColumnFormat, int maxRows)

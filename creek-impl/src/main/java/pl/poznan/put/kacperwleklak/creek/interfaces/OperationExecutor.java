@@ -1,7 +1,9 @@
 package pl.poznan.put.kacperwleklak.creek.interfaces;
 
+import pl.poznan.put.kacperwleklak.creek.structure.Operation;
+
 public interface OperationExecutor {
 
-    void executeOperation(String queryString, CreekClient client);
+    void executeOperation(Operation operation, CreekClient client);
 
 }

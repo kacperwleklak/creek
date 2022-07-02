@@ -29,29 +29,6 @@ about providing environment variables (see `docker-compose.yml` file and)
 
 ## 💻 Usage
 
-#### Message example
-```shell
-curl --location --request POST 'http://localhost:8082/' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "operation": "s=3;x=5;y=s+x",
-    "strong": true
-}'
-```
-Read the docs for operation syntax: [Mvel documentation](http://mvel.documentnode.com/)
-
-#### Temporary test endpoints:
-Returns StateObject
-```shell
-curl --location --request GET 'http://localhost:8082/state'
-```
-
-Returns list of responses to clients.
-```shell
-curl --location --request GET 'http://localhost:8082/responses'
-```
-
-
 ## 📝 TODO-list
 * CAB module:
   * Waiting with ACCEPT until predicate Q becomes true

@@ -12,15 +12,18 @@ services:
     expose:
       - "10001"
     ports:
-      - "8081:8080"     # used for internal TCP communication between replicas
+      - "8081:8080"
+      - "5433:5432"
     environment:
+      - PG_PORT=5432
+      - DBNAME=creek
       - COMMUNICATION_REPLICAS_PORT=10001
       - COMMUNICATION_REPLICAS_HOST=replica1
       - SERVER_PORT=8080
       - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
         # Please pay attention to the order of the replicas. COMMUNICATION_REPLICAS_NODES addresses should be ordered in
-        # the same way for each replica, because the first one is recognized as the leader (which should be the same
-        # for all replicas).
+      # the same way for each replica, because the first one is recognized as the leader (which should be the same
+      # for all replicas).
   replica2:
     image: kacperwleklak/creek
     hostname: replica2
@@ -30,7 +33,10 @@ services:
       - "10002"
     ports:
       - "8082:8080"     # used for internal TCP communication between replicas
+      - "5434:5432"
     environment:
+      - PG_PORT=5432
+      - DBNAME=creek
       - COMMUNICATION_REPLICAS_PORT=10002
       - COMMUNICATION_REPLICAS_HOST=replica2
       - SERVER_PORT=8080
@@ -45,7 +51,10 @@ services:
       - "10003"
     ports:
       - "8083:8080"     # used for internal TCP communication between replicas
+      - "5435:5432"
     environment:
+      - PG_PORT=5432
+      - DBNAME=creek
       - COMMUNICATION_REPLICAS_PORT=10003
       - COMMUNICATION_REPLICAS_HOST=replica3
       - SERVER_PORT=8080
@@ -58,9 +67,12 @@ services:
       - creek_net
     ports:
       - "8084:8080"     # used for internal TCP communication between replicas
+      - "5436:5432"
     expose:
       - "10004"
     environment:
+      - PG_PORT=5432
+      - DBNAME=creek
       - COMMUNICATION_REPLICAS_PORT=10004
       - COMMUNICATION_REPLICAS_HOST=replica4
       - SERVER_PORT=8080

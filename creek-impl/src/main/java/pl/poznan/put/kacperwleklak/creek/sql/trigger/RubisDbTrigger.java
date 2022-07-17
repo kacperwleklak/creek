@@ -14,10 +14,10 @@ public class RubisDbTrigger {
             "INSERT INTO %s_history VALUES(%s) ON CONFLICT DO NOTHING";
 
     private static int getCurrentVersion(Connection connection) throws SQLException {
-        PreparedStatement stmt = connection.prepareStatement("SELECT currval('global_version')");
+        PreparedStatement stmt = connection.prepareStatement("SELECT val from sequence where name='global_version'");
         ResultSet resultSet = stmt.executeQuery();
         resultSet.next();
-        return resultSet.getInt("currval");
+        return resultSet.getInt("val");
     }
 
     private static String generateWildcards(int size) {

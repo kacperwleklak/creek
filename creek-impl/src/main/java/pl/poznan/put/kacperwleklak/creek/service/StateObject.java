@@ -9,6 +9,7 @@ import org.h2.command.CommandInterface;
 import org.h2.engine.*;
 import org.h2.message.DbException;
 import org.h2.result.ResultInterface;
+import org.h2.result.ResultWithGeneratedKeys;
 import org.h2.schema.Schema;
 import org.h2.table.Column;
 import org.h2.table.Table;
@@ -131,8 +132,10 @@ public class StateObject {
     }
 
     private long bumpVersion() {
-        Command command = session.prepareLocal("SELECT nextval('global_version');");
-        ResultInterface resultInterface = command.executeQuery(0, false);
+        Command updateCommand = session.prepareLocal("UPDATE sequence SET val=val+1 WHERE name='global_version'");
+        updateCommand.executeUpdate(null);
+        Command getVersionCommand = session.prepareLocal("SELECT val FROM sequence WHERE name='global_version'");
+        ResultInterface resultInterface = getVersionCommand.executeQuery(0, false);
         resultInterface.next();
         return resultInterface.currentRow()[0].getLong();
     }

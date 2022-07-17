@@ -1,1 +1,8 @@
-CREATE SEQUENCE global_version START WITH 1 INCREMENT BY 1 MINVALUE 1;
+CREATE TABLE sequence
+(
+    name VARCHAR(50) NOT NULL UNIQUE,
+    val INTEGER,
+    PRIMARY KEY (name)
+);
+
+INSERT INTO sequence values ('global_version', 1);

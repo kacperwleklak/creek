@@ -1,21 +1,3 @@
-CREATE TABLE categories_history
-(
-    version  INTEGER          NOT NULL,
-    inserted BOOLEAN DEFAULT FALSE,
-    id   varchar(36),
-    name     VARCHAR(50),
-    PRIMARY KEY (version, id)
-);
-
-CREATE TABLE regions_history
-(
-    version  INTEGER          NOT NULL,
-    inserted BOOLEAN DEFAULT FALSE,
-    id   varchar(36),
-    name     VARCHAR(25),
-    PRIMARY KEY (version, id)
-);
-
 CREATE TABLE users_history
 (
     version       INTEGER          NOT NULL,
@@ -29,7 +11,7 @@ CREATE TABLE users_history
     rating        INTEGER,
     balance       FLOAT,
     creation_date DATETIME,
-    region        varchar(36),
+    region        INTEGER,
     PRIMARY KEY (version, id)
 );
 
@@ -49,7 +31,7 @@ CREATE TABLE items_history
     start_date    DATETIME,
     end_date      DATETIME,
     seller        varchar(36),
-    category      varchar(36),
+    category      INTEGER,
     PRIMARY KEY (version, id)
 );
 
@@ -69,7 +51,7 @@ CREATE TABLE old_items_history
     start_date    DATETIME,
     end_date      DATETIME,
     seller        varchar(36),
-    category      varchar(36),
+    category      INTEGER,
     PRIMARY KEY (version, id)
 );
 
@@ -118,8 +100,8 @@ CREATE TABLE ids_history
     version  INTEGER          NOT NULL,
     inserted BOOLEAN DEFAULT FALSE,
     id   varchar(36),
-    category varchar(36),
-    region   varchar(36),
+    category INTEGER,
+    region   INTEGER,
     users    varchar(36),
     item     varchar(36),
     comment  varchar(36),

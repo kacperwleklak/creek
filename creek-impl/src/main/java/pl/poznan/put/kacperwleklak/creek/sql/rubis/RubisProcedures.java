@@ -7,7 +7,7 @@ import java.sql.SQLException;
 
 public class RubisProcedures {
 
-    public static void processBid(Connection connection, String itemId, float maxBid, String userId, int qty, float bid) throws SQLException {
+    public static void processBid(Connection connection, String bidId, String itemId, float maxBid, String userId, int qty, float bid) throws SQLException {
         PreparedStatement selectStmt = connection.prepareStatement("SELECT max_bid FROM items WHERE id=?");
         selectStmt.setString(1, itemId);
         ResultSet selectResultSet = selectStmt.executeQuery();
@@ -19,12 +19,13 @@ public class RubisProcedures {
             updateStmt.executeUpdate();
         }
 
-        PreparedStatement insertBidsStmt = connection.prepareStatement("INSERT INTO bids VALUES (DEFAULT, ?, ?, ?, ?, ?, NOW())");
-        insertBidsStmt.setString(1, userId);
-        insertBidsStmt.setString(2, itemId);
-        insertBidsStmt.setInt(3, qty);
-        insertBidsStmt.setFloat(4, bid);
-        insertBidsStmt.setFloat(5, maxBid);
+        PreparedStatement insertBidsStmt = connection.prepareStatement("INSERT INTO bids VALUES (?, ?, ?, ?, ?, ?, NOW())");
+        insertBidsStmt.setString(1, bidId);
+        insertBidsStmt.setString(2, userId);
+        insertBidsStmt.setString(3, itemId);
+        insertBidsStmt.setInt(4, qty);
+        insertBidsStmt.setFloat(5, bid);
+        insertBidsStmt.setFloat(6, maxBid);
         insertBidsStmt.executeUpdate();
 
         PreparedStatement updateItemsStmt = connection.prepareStatement("UPDATE items SET nb_of_bids=nb_of_bids+1 WHERE id=?");
@@ -32,7 +33,7 @@ public class RubisProcedures {
         updateItemsStmt.executeUpdate();
     }
 
-    public static void buyNow(Connection connection, String itemId, int qty, String userId) throws SQLException {
+    public static void buyNow(Connection connection, String buyNowId, String itemId, int qty, String userId) throws SQLException {
         PreparedStatement selectStmt = connection.prepareStatement("SELECT * FROM items WHERE id=?");
         selectStmt.setString(1, itemId);
         ResultSet selectResultSet = selectStmt.executeQuery();
@@ -52,14 +53,15 @@ public class RubisProcedures {
         updateItemStmt.setString(2, itemId);
         updateItemStmt.executeUpdate();
 
-        PreparedStatement insertBuyNow = connection.prepareStatement("INSERT INTO buy_now VALUES (DEFAULT, ?, ?, ?, NOW())");
-        insertBuyNow.setString(1, userId);
-        insertBuyNow.setString(2, itemId);
-        insertBuyNow.setInt(3, qty);
+        PreparedStatement insertBuyNow = connection.prepareStatement("INSERT INTO buy_now VALUES (?, ?, ?, ?, NOW())");
+        insertBuyNow.setString(1, buyNowId);
+        insertBuyNow.setString(2, userId);
+        insertBuyNow.setString(3, itemId);
+        insertBuyNow.setInt(4, qty);
         insertBuyNow.executeUpdate();
     }
 
-    public static void processComment(Connection connection, String from, String to, String itemId, int rating, String comment) throws SQLException {
+    public static void processComment(Connection connection, String commentId, String from, String to, String itemId, int rating, String comment) throws SQLException {
         PreparedStatement selectStmt = connection.prepareStatement("SELECT count(*) AS count FROM users WHERE id=?");
         selectStmt.setString(1, itemId);
         ResultSet selectResultSet = selectStmt.executeQuery();
@@ -73,12 +75,13 @@ public class RubisProcedures {
         updateStmt.setString(2, to);
         updateStmt.executeUpdate();
 
-        PreparedStatement insertStmt = connection.prepareStatement("INSERT INTO comments VALUES (DEFAULT, ?, ?, ?, ?, NOW(), ?)");
-        insertStmt.setString(1, from);
-        insertStmt.setString(2, to);
-        insertStmt.setString(3, itemId);
-        insertStmt.setInt(4, rating);
-        insertStmt.setString(5, comment);
+        PreparedStatement insertStmt = connection.prepareStatement("INSERT INTO comments VALUES (?, ?, ?, ?, ?, NOW(), ?)");
+        insertStmt.setString(1, commentId);
+        insertStmt.setString(2, from);
+        insertStmt.setString(3, to);
+        insertStmt.setString(4, itemId);
+        insertStmt.setInt(5, rating);
+        insertStmt.setString(6, comment);
         insertStmt.executeUpdate();
     }
 }

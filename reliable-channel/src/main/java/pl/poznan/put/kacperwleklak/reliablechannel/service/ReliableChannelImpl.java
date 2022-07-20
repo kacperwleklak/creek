@@ -3,6 +3,7 @@ package pl.poznan.put.kacperwleklak.reliablechannel.service;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
@@ -50,7 +51,7 @@ public class ReliableChannelImpl implements ReliableChannel {
 
     @Override
     public void rCast(byte[] msg) {
-        connections.values().forEach(replica -> replica.sendMessage(msg));
+        connections.values().forEach(replicaTcpClient -> sendAsyncMessage(replicaTcpClient, msg));
     }
 
     @Override
@@ -62,11 +63,16 @@ public class ReliableChannelImpl implements ReliableChannel {
             tcpClientSocket = new TcpClientSocket(host, port);
             connections.put(address, tcpClientSocket);
         }
-        tcpClientSocket.sendMessage(msg);
+        sendAsyncMessage(tcpClientSocket, msg);
     }
 
     @Override
     public void registerListener(ReliableChannelDeliverListener deliverListener) {
         listeners.add(deliverListener);
+    }
+
+    @Async
+    void sendAsyncMessage(TcpClientSocket tcpClientSocket, byte[] msg) {
+        tcpClientSocket.sendMessage(msg);
     }
 }

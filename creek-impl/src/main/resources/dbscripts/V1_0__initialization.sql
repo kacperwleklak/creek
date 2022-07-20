@@ -1,13 +1,13 @@
 CREATE TABLE categories
 (
-    id            varchar(36) DEFAULT(UUID()) NOT NULL,
+    id   INTEGER UNSIGNED NOT NULL UNIQUE AUTO_INCREMENT,
     name VARCHAR(50),
     PRIMARY KEY (id)
 );
 
 CREATE TABLE regions
 (
-    id            varchar(36) DEFAULT(UUID()) NOT NULL,
+    id   INTEGER UNSIGNED NOT NULL UNIQUE AUTO_INCREMENT,
     name VARCHAR(25),
     PRIMARY KEY (id)
 );
@@ -23,7 +23,7 @@ CREATE TABLE users
     rating        INTEGER,
     balance       FLOAT,
     creation_date DATETIME,
-    region        varchar(36) NOT NULL,
+    region        INTEGER NOT NULL,
     PRIMARY KEY (id),
     INDEX         users_auth (nickname,password),
     INDEX         users_region_id (region)
@@ -43,7 +43,7 @@ CREATE TABLE items
     start_date    DATETIME,
     end_date      DATETIME,
     seller        varchar(36) NOT NULL,
-    category      varchar(36) NOT NULL,
+    category      INTEGER NOT NULL,
     PRIMARY KEY (id),
     INDEX         items_seller_id (seller),
     INDEX         items_category_id (category)
@@ -63,7 +63,7 @@ CREATE TABLE old_items
     start_date    DATETIME,
     end_date      DATETIME,
     seller        varchar(36) NOT NULL,
-    category      varchar(36) NOT NULL,
+    category      INTEGER NOT NULL,
     PRIMARY KEY (id),
     INDEX         old_items_seller_id (seller),
     INDEX         old_items_category_id (category)
@@ -113,8 +113,8 @@ CREATE TABLE buy_now
 CREATE TABLE ids
 (
     id            varchar(36) DEFAULT(UUID()) NOT NULL,
-    category varchar(36) NOT NULL,
-    region   varchar(36) NOT NULL,
+    category INTEGER NOT NULL,
+    region        INTEGER NOT NULL,
     users    varchar(36) NOT NULL,
     item     varchar(36) NOT NULL,
     comment  varchar(36) NOT NULL,

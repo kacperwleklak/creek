@@ -33,5 +33,4 @@ about providing environment variables (see `docker-compose.yml` file and)
 * CAB module:
   * Waiting with ACCEPT until predicate Q becomes true
 * Creek module:
-  * SQL statements parsing
-  * Client interface with request response
+  * Rollback sql operations

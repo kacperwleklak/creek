@@ -73,7 +73,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.reliableChannel = reliableChannel;
         PostgresServer postgresServer = new PostgresServer(this);
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
-        this.state = new StateObject(postgresServer);
+        this.state = new StateObjectSql(postgresServer);
     }
 
     @PostConstruct

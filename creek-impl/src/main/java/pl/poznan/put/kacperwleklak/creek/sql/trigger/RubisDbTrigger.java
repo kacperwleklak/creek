@@ -1,6 +1,7 @@
 package pl.poznan.put.kacperwleklak.creek.sql.trigger;
 
 import org.h2.api.Trigger;
+import org.h2.jdbc.JdbcConnection;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
@@ -10,7 +11,9 @@ import java.util.StringJoiner;
 
 public class RubisDbTrigger {
 
-    private static final String INSERT_VERSION_STATEMENT_FORMAT =
+    private static final String INSERT_VERSION_STATEMENT_FORMAT_MYSQL =
+            "INSERT IGNORE INTO %s_history VALUES(%s)";
+    private static final String INSERT_VERSION_STATEMENT_FORMAT_POSTGRES =
             "INSERT INTO %s_history VALUES(%s) ON CONFLICT DO NOTHING";
 
     private static int getCurrentVersion(Connection connection) throws SQLException {
@@ -28,6 +31,18 @@ public class RubisDbTrigger {
         return stringJoiner.toString();
     }
 
+    private static String getVersionInsertStatement(Connection connection) {
+        String mode = ((JdbcConnection) connection).getSession()
+                .getDynamicSettings()
+                .mode
+                .toString();
+        if (mode.equalsIgnoreCase("mysql")) {
+            return INSERT_VERSION_STATEMENT_FORMAT_MYSQL;
+        } else {
+            return INSERT_VERSION_STATEMENT_FORMAT_POSTGRES;
+        }
+    }
+
     protected static void saveVersion(Connection connection, Object[] oldObject, Object[] newObject, String tableName)
             throws SQLException {
         boolean inserted;
@@ -41,7 +56,7 @@ public class RubisDbTrigger {
             inserted = false;
         }
         PreparedStatement statement = connection.prepareStatement(
-                String.format(INSERT_VERSION_STATEMENT_FORMAT,
+                String.format(getVersionInsertStatement(connection),
                         tableName, generateWildcards(objectToInsert.length + 2) //+2 is for version and inserted flag
                 )
         );

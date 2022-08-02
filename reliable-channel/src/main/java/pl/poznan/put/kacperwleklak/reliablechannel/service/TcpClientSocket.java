@@ -24,7 +24,7 @@ public class TcpClientSocket {
         buffer = ByteBuffer.allocate(65_536);
     }
 
-    public void sendMessage(byte[] message) {
+    public synchronized void sendMessage(byte[] message) {
         try {
             if (client == null) {
                 openConnection();

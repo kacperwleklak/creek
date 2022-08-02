@@ -13,7 +13,8 @@ import org.h2.util.*;
 import org.h2.value.*;
 import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
 import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
-import pl.poznan.put.kacperwleklak.creek.structure.Operation;
+import pl.poznan.put.kacperwleklak.creek.protocol.Action;
+import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 
 import java.io.*;
@@ -403,7 +404,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 CommandInterface prep = prepared.prep;
                 server.trace(prepared.sql);
                 String query = buildParametrizedQuery(prepared.sql, prep.getParameters());
-                operationExecutor.executeOperation(new Operation(query, Operation.Action.EXECUTE), this);
+                operationExecutor.executeOperation(new Operation(query, Action.EXECUTE), this);
                 break;
             }
             case 'S': {
@@ -414,7 +415,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             case 'Q': {
                 server.trace("Query");
                 String query = readString();
-                operationExecutor.executeOperation(new Operation(query, Operation.Action.QUERY), this);
+                operationExecutor.executeOperation(new Operation(query, Action.QUERY), this);
                 break;
             }
             case 'X': {

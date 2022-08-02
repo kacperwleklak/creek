@@ -17,7 +17,6 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 @Slf4j
-@Service
 public class TcpServerSocket {
 
     private final Selector selector;
@@ -44,7 +43,7 @@ public class TcpServerSocket {
 
     private final Runnable incomingConnectionsAcceptor = new Runnable() {
         @Override
-        public void run() {
+        public synchronized void run() {
             log.info("Running TcpServerSocket...");
             while (true) {
                 try {

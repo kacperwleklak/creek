@@ -17,8 +17,8 @@ import org.h2.util.ScriptReader;
 import org.h2.util.StringUtils;
 import org.h2.value.*;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
-import pl.poznan.put.kacperwleklak.creek.structure.Operation;
-import pl.poznan.put.kacperwleklak.creek.structure.Request;
+import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
+import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseMessageStream;
 
@@ -39,7 +39,7 @@ public class StateObjectSql implements StateObject {
     private static final List<String> VERSIONABLE_TABLES =
             List.of("users", "items", "old_items", "bids", "comments", "buy_now", "ids");
 
-    private static final String SELECT_VERSION_RECORDS_FORMAT = "SELECT * FROM %s WHERE version = %d;";
+    private static final String SELECT_VERSION_RECORDS_FORMAT = "SELECT * FROM %s_history WHERE version = %d;";
     private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE id = %s;";
     private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE id = %s;";
 

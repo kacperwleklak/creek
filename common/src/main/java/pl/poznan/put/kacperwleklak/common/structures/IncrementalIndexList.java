@@ -3,9 +3,9 @@ package pl.poznan.put.kacperwleklak.common.structures;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
-public class IncrementalIndexList<E> extends ConcurrentHashMap<Integer, E> {
+public class IncrementalIndexList<E> extends ConcurrentHashMap<Long, E> {
 
-    int highestIndex = -1;
+    long highestIndex = -1L;
 
     public IncrementalIndexList() {
         super();
@@ -17,18 +17,18 @@ public class IncrementalIndexList<E> extends ConcurrentHashMap<Integer, E> {
      * @param e object to be added
      * @return elements index
      */
-    public synchronized int add(E e) {
-        int index = ++highestIndex;
+    public synchronized long add(E e) {
+        long index = ++highestIndex;
         put(index, e);
         return index;
     }
 
-    public int indexOf(E e) {
+    public long indexOf(E e) {
         return entrySet().stream()
                 .filter(integerEEntry -> integerEEntry.getValue().equals(e))
                 .findFirst()
                 .map(Entry::getKey)
-                .orElse(-1);
+                .orElse(-1L);
     }
 
     public Stream<E> stream() {

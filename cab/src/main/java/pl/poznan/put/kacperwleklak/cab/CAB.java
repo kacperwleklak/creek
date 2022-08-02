@@ -1,5 +1,7 @@
 package pl.poznan.put.kacperwleklak.cab;
 
+import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
+
 import java.util.Map;
 
 public interface CAB {

@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
@@ -16,7 +15,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 
-@Service
 @Slf4j
 public class ReliableChannelImpl implements ReliableChannel {
 
@@ -26,7 +24,6 @@ public class ReliableChannelImpl implements ReliableChannel {
     private final List<ReliableChannelDeliverListener> listeners;
     private final Map<String, TcpClientSocket> connections;
 
-    @Autowired
     public ReliableChannelImpl(@Value("${communication.replicas.nodes}") List<String> replicasAddresses,
                                TcpServerSocket serverSocket) {
         this.replicasAddresses = replicasAddresses;
@@ -46,7 +43,11 @@ public class ReliableChannelImpl implements ReliableChannel {
     }
 
     private Consumer<byte[]> getMessageConsumer() {
-        return message -> listeners.forEach(listener -> listener.rDeliver(message));
+        return message -> listeners.forEach(listener -> {
+            byte[] msgCopy = new byte[65_536];
+            System.arraycopy(message, 0, msgCopy, 0, 65_536);
+            listener.rDeliver(msgCopy);
+        });
     }
 
     @Override

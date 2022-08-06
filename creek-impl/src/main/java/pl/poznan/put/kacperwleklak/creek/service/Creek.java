@@ -3,6 +3,7 @@ package pl.poznan.put.kacperwleklak.creek.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.apache.thrift.TServiceClient;
+import org.apache.thrift.async.TAsyncClient;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -23,6 +24,7 @@ import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
+import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ReliableChannelThrift;
 
 import javax.annotation.PostConstruct;
@@ -86,7 +88,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
     @PostConstruct
     public void postInitialization() throws SQLException {
         reliableChannel.registerService(CREEK_PROTOCOL, new CreekProtocol.Processor<>(this),
-                new CreekProtocol.Client.Factory());
+                new CreekProtocol.AsyncClient.FactoryBuilder());
         cab.registerListener(this);
         cab.start(Map.of(PREDICATE_ID, this));
         pgServer.start();
@@ -225,7 +227,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
         return Instant.now().getEpochSecond();
     }
 
-    private void broadcast(Consumer<TServiceClient> clientConsumer) {
+    private void broadcast(Consumer<TAsyncClient> clientConsumer) {
         reliableChannel.rCast(CREEK_PROTOCOL, clientConsumer);
     }
 
@@ -308,10 +310,10 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
         }
     }
 
-    private Consumer<TServiceClient> requestOperationMessage(Request request) {
+    private Consumer<TAsyncClient> requestOperationMessage(Request request) {
         return tServiceClient -> {
             try {
-                ((CreekProtocol.Client) tServiceClient).operationRequestHandler(request);
+                ((CreekProtocol.AsyncClient) tServiceClient).operationRequestHandler(request, new DummyThriftCallback());
             } catch (TException e) {
                 e.printStackTrace();
             }

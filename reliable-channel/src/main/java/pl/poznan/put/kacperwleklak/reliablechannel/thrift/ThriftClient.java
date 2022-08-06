@@ -2,38 +2,48 @@ package pl.poznan.put.kacperwleklak.reliablechannel.thrift;
 
 import org.apache.thrift.TServiceClient;
 import org.apache.thrift.TServiceClientFactory;
+import org.apache.thrift.async.TAsyncClient;
+import org.apache.thrift.async.TAsyncClientFactory;
+import org.apache.thrift.async.TAsyncClientManager;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.protocol.TMultiplexedProtocol;
-import org.apache.thrift.transport.TSocket;
+import org.apache.thrift.protocol.TProtocol;
+import org.apache.thrift.protocol.TProtocolFactory;
+import org.apache.thrift.transport.TNonblockingSocket;
+import org.apache.thrift.transport.TNonblockingTransport;
+import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
+import java.io.IOException;
 import java.util.HashMap;
-import java.util.List;
+import java.util.Map;
 
 public class ThriftClient {
 
-    private static final String SERVICE_CLIENT_NAME_FORMAT = "%s_%s:%d";
-
     private final String host;
     private final int port;
-    private final TSocket socket;
-    private final TBinaryProtocol protocol;
-    private HashMap<String, TServiceClient> clients;
+    private final TNonblockingTransport transport;
+    private final TAsyncClientManager clientManager;
+    private Map<String, TAsyncClient> clients;
 
-    public ThriftClient(String host, int port) throws TTransportException {
+    public ThriftClient(String host, int port) throws TTransportException, IOException {
         this.host = host;
         this.port = port;
-        this.socket = new TSocket(host, port);
-        this.protocol = new TBinaryProtocol(socket);
+        this.transport = new TNonblockingSocket(host, port);
+        this.clientManager = new TAsyncClientManager();
+        this.clients = new HashMap<>();
     }
 
-    public void registerService(String serviceName, TServiceClientFactory clientFactory) {
-        String clientName = String.format(SERVICE_CLIENT_NAME_FORMAT, serviceName, host, port);
-        TMultiplexedProtocol mp = new TMultiplexedProtocol(protocol, clientName);
-        clientFactory.getClient(mp);
+    public void registerService(String serviceName, TAsyncClientFactoryBuilder clientFactoryBuilder) {
+        String clientName = ThriftUtils.generateThriftServiceName(serviceName, host, port);
+        clientFactoryBuilder.setClientManager(clientManager);
+        clientFactoryBuilder.setProtocolFactory(new TMultiplexedProtocolFactory(clientName));
+        TAsyncClientFactory clientFactory = clientFactoryBuilder.build();
+        TAsyncClient client = clientFactory.getAsyncClient(transport);
+        clients.put(clientName, client);
     }
 
-    public TServiceClient client(String serviceName) {
+    public TAsyncClient client(String serviceName) {
         return clients.get(serviceName);
     }
 
@@ -45,11 +55,6 @@ public class ThriftClient {
         return port;
     }
 
-    public void openSocket() throws TTransportException {
-        this.socket.open();
-    }
-
-    public boolean isSocketOpened() {
-        return this.socket.isOpen();
+    public synchronized void openSocketIfClosed() throws TTransportException {
     }
 }

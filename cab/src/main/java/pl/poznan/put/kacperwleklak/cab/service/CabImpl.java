@@ -3,6 +3,8 @@ package pl.poznan.put.kacperwleklak.cab.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.apache.thrift.TServiceClient;
+import org.apache.thrift.async.AsyncMethodCallback;
+import org.apache.thrift.async.TAsyncClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
@@ -16,6 +18,7 @@ import pl.poznan.put.kacperwleklak.cab.protocol.*;
 import pl.poznan.put.kacperwleklak.common.structures.IncrementalIndexList;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
+import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ReliableChannelThrift;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ThriftClient;
 
@@ -68,7 +71,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
     public void postConstruct() {
         reliableChannel.registerService(CAB_PROTOCOL,
                 new CabProtocol.Processor<>(this),
-                new CabProtocol.Client.Factory());
+                new CabProtocol.AsyncClient.FactoryBuilder());
     }
 
     public void setupReplicasValues(List<String> replicasAddresses, String host, int port) {
@@ -135,7 +138,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
         return cabPredicate.testAsync(cabMessage.getMessageID(), this);
     }
 
-    private void broadcast(Consumer<TServiceClient> clientConsumer) {
+    private void broadcast(Consumer<TAsyncClient> clientConsumer) {
         reliableChannel.rCast(CAB_PROTOCOL, clientConsumer);
     }
 
@@ -189,30 +192,30 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
         this.predicates = predicates;
     }
 
-    private Consumer<TServiceClient> broadcastMessageConsumer(CabMessage cabMessage) {
+    private Consumer<TAsyncClient> broadcastMessageConsumer(CabMessage cabMessage) {
         return tServiceClient -> {
             try {
-                ((CabProtocol.Client) tServiceClient).broadcastEventHandler(cabMessage);
+                ((CabProtocol.AsyncClient) tServiceClient).broadcastEventHandler(cabMessage, new DummyThriftCallback());
             } catch (TException e) {
                 e.printStackTrace();
             }
         };
     }
 
-    private Consumer<TServiceClient> proposeMessageConsumer(CabProposeMessage cabProposeMessage) {
+    private Consumer<TAsyncClient> proposeMessageConsumer(CabProposeMessage cabProposeMessage) {
         return tServiceClient -> {
             try {
-                ((CabProtocol.Client) tServiceClient).proposeEventHandler(cabProposeMessage);
+                ((CabProtocol.AsyncClient) tServiceClient).proposeEventHandler(cabProposeMessage, new DummyThriftCallback());
             } catch (TException e) {
                 e.printStackTrace();
             }
         };
     }
 
-    private Consumer<TServiceClient> acceptMessageConsumer(CabAcceptMessage acceptMessage) {
+    private Consumer<TAsyncClient> acceptMessageConsumer(CabAcceptMessage acceptMessage) {
         return tServiceClient -> {
             try {
-                ((CabProtocol.Client) tServiceClient).acceptEventHandler(acceptMessage);
+                ((CabProtocol.AsyncClient) tServiceClient).acceptEventHandler(acceptMessage, new DummyThriftCallback());
             } catch (TException e) {
                 e.printStackTrace();
             }

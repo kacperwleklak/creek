@@ -1,17 +1,10 @@
 package pl.poznan.put.kacperwleklak.reliablechannel.thrift;
 
-import org.apache.thrift.TServiceClient;
-import org.apache.thrift.TServiceClientFactory;
 import org.apache.thrift.async.TAsyncClient;
 import org.apache.thrift.async.TAsyncClientFactory;
 import org.apache.thrift.async.TAsyncClientManager;
-import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.protocol.TMultiplexedProtocol;
-import org.apache.thrift.protocol.TProtocol;
-import org.apache.thrift.protocol.TProtocolFactory;
 import org.apache.thrift.transport.TNonblockingSocket;
 import org.apache.thrift.transport.TNonblockingTransport;
-import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
 
 import java.io.IOException;
@@ -53,8 +46,5 @@ public class ThriftClient {
 
     public int getPort() {
         return port;
-    }
-
-    public synchronized void openSocketIfClosed() throws TTransportException {
     }
 }

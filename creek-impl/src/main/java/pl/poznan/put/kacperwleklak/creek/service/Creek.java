@@ -2,7 +2,6 @@ package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
-import org.apache.thrift.TServiceClient;
 import org.apache.thrift.async.TAsyncClient;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,7 +44,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
 
     // current state variables
     private int currentEventNumber;
-    private int replicaId;
+    private final int replicaId;
     private final Set<EventID> casualCtx;
     private List<Request> tentative;
     private List<Request> committed;

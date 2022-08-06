@@ -2,14 +2,11 @@ package pl.poznan.put.kacperwleklak.cab.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
-import org.apache.thrift.TServiceClient;
-import org.apache.thrift.async.AsyncMethodCallback;
 import org.apache.thrift.async.TAsyncClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.stereotype.Component;
-import org.springframework.util.SerializationUtils;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
@@ -17,13 +14,14 @@ import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.*;
 import pl.poznan.put.kacperwleklak.common.structures.IncrementalIndexList;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ReliableChannelThrift;
-import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ThriftClient;
 
 import javax.annotation.PostConstruct;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 

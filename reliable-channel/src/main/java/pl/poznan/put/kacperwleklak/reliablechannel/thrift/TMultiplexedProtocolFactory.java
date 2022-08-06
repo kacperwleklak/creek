@@ -8,7 +8,7 @@ import org.apache.thrift.transport.TTransport;
 
 public class TMultiplexedProtocolFactory implements TProtocolFactory {
 
-    private String clientName;
+    private final String clientName;
 
     public TMultiplexedProtocolFactory(String clientName) {
         this.clientName = clientName;

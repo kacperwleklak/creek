@@ -3,14 +3,11 @@ package pl.poznan.put.kacperwleklak.reliablechannel.thrift;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TMultiplexedProcessor;
 import org.apache.thrift.TProcessor;
-import org.apache.thrift.TServiceClient;
-import org.apache.thrift.TServiceClientFactory;
 import org.apache.thrift.async.TAsyncClient;
-import org.apache.thrift.async.TAsyncClientFactory;
 import org.apache.thrift.server.TNonblockingServer;
-import org.apache.thrift.server.TServer;
-import org.apache.thrift.server.TSimpleServer;
-import org.apache.thrift.transport.*;
+import org.apache.thrift.transport.TNonblockingServerSocket;
+import org.apache.thrift.transport.TNonblockingServerTransport;
+import org.apache.thrift.transport.TTransportException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -65,9 +62,7 @@ public class ReliableChannelThrift {
                 .filter(thriftClient -> thriftClient.getHost().equals(host))
                 .findAny()
                 .ifPresentOrElse(
-                        thriftClient -> {
-                            sendRequest(thriftClient, serviceName, function);
-                        },
+                        thriftClient -> sendRequest(thriftClient, serviceName, function),
                         () -> log.error("Unable to find replica {}:{}", host, port)
                 );
     }

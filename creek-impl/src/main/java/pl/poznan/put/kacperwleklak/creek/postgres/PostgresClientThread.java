@@ -1,5 +1,6 @@
 package pl.poznan.put.kacperwleklak.creek.postgres;
 
+import lombok.extern.slf4j.Slf4j;
 import org.h2.api.ErrorCode;
 import org.h2.command.CommandInterface;
 import org.h2.engine.*;
@@ -27,6 +28,7 @@ import java.sql.SQLException;
 import java.util.*;
 import java.util.regex.Pattern;
 
+@Slf4j
 public class PostgresClientThread implements Runnable, CreekClient {
 
     private static final boolean INTEGER_DATE_TYPES = false;
@@ -72,6 +74,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
     private int processId;
 
     private CommandInterface activeRequest;
+    private boolean activeAsyncRequest = false;
     private String clientEncoding = SysProperties.PG_DEFAULT_CLIENT_ENCODING;
     private String dateStyle = "ISO, MDY";
     private TimeZoneProvider timeZone = DateTimeUtils.getTimeZone();
@@ -96,13 +99,18 @@ public class PostgresClientThread implements Runnable, CreekClient {
             out = socket.getOutputStream();
             dataInRaw = new DataInputStream(ins);
             while (!stop) {
-                process();
-                out.flush();
+                while (!activeAsyncRequest) {
+                    process();
+                    if (!activeAsyncRequest) {
+                        out.flush();
+                    }
+                }
             }
         } catch (EOFException e) {
-            // more or less normal disconnect
+            e.printStackTrace();
         } catch (Exception e) {
             server.traceError(e);
+            e.printStackTrace();
         } finally {
             server.trace("Disconnect");
             close();
@@ -139,7 +147,10 @@ public class PostgresClientThread implements Runnable, CreekClient {
     }
 
     @Override
-    public void sendResponse(Response response) {
+    public synchronized void sendResponse(Response response) {
+        if (socket == null || socket.isClosed()) {
+            return;
+        }
         response.getResponseMessageList().forEach(responseMessageStream -> {
             startMessage(responseMessageStream.getMessageType());
             try {
@@ -148,8 +159,17 @@ public class PostgresClientThread implements Runnable, CreekClient {
             } catch (IOException e) {
                 e.printStackTrace();
             }
-
         });
+        try {
+            out.flush();
+        } catch (IOException ioe) {
+            ioe.printStackTrace();
+            server.trace("Disconnect");
+            close();
+        } finally {
+            log.debug("Client socket unlocked");
+            activeAsyncRequest = false;
+        }
     }
 
     private void process() throws IOException {
@@ -227,6 +247,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                                     timeZone = TimeZoneProvider.ofId(pgTimeZone(value));
                                 } catch (Exception e) {
                                     server.trace("Unknown TimeZone: " + value);
+                                    e.printStackTrace();
                                 }
                                 break;
                         }
@@ -297,6 +318,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                     prepared.put(p.name, p);
                     sendParseComplete();
                 } catch (Exception e) {
+                    e.printStackTrace();
                     sendErrorResponse(e);
                 }
                 break;
@@ -325,6 +347,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                         setParameter(parameters, prep.paramType[i], i, formatCodes);
                     }
                 } catch (Exception e) {
+                    e.printStackTrace();
                     sendErrorResponse(e);
                     break;
                 }
@@ -371,6 +394,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                             sendParameterDescription(p.prep.getParameters(), p.paramType);
                             sendRowDescription(p.prep.getMetaData(), null);
                         } catch (Exception e) {
+                            e.printStackTrace();
                             sendErrorResponse(e);
                         }
                     }
@@ -383,6 +407,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                         try {
                             sendRowDescription(prep.getMetaData(), p.resultColumnFormat);
                         } catch (Exception e) {
+                            e.printStackTrace();
                             sendErrorResponse(e);
                         }
                     }
@@ -404,6 +429,8 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 CommandInterface prep = prepared.prep;
                 server.trace(prepared.sql);
                 String query = buildParametrizedQuery(prepared.sql, prep.getParameters());
+                log.debug("Client socket locked");
+                activeAsyncRequest = true;
                 operationExecutor.executeOperation(new Operation(query, Action.EXECUTE), this);
                 break;
             }
@@ -415,6 +442,8 @@ public class PostgresClientThread implements Runnable, CreekClient {
             case 'Q': {
                 server.trace("Query");
                 String query = readString();
+                log.debug("Client socket locked");
+                activeAsyncRequest = true;
                 operationExecutor.executeOperation(new Operation(query, Action.QUERY), this);
                 break;
             }
@@ -461,6 +490,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             prepared.closeResult();
             sendCommandComplete(prep, 0);
         } catch (Exception e) {
+            e.printStackTrace();
             prepared.closeResult();
             throw e;
         }
@@ -1098,6 +1128,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
      * Close this connection.
      */
     void close() {
+        log.info("Closing socket");
         for (Prepared prep : prepared.values()) {
             prep.close();
         }
@@ -1106,7 +1137,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             try {
                 session.close();
             } catch (Exception e) {
-                // Ignore
+                e.printStackTrace();
             }
             if (socket != null) {
                 socket.close();
@@ -1260,7 +1291,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 closeResult();
                 prep.close();
             } catch (Exception e) {
-                // Ignore
+                e.printStackTrace();
             }
         }
 

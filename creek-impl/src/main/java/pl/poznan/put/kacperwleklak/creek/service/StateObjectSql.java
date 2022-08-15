@@ -62,6 +62,7 @@ public class StateObjectSql implements StateObject {
     }
 
     public synchronized void rollback(Request request) {
+        log.debug("Rolling back {}", request.toString());
         rollbackSqlOperations(request);
         undoLog.remove(request);
     }

@@ -95,15 +95,17 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
 
     @Override
     public synchronized void executeOperation(Operation operation, CreekClient client) {
-        invoke(operation, isStrong(), client);
+        invoke(operation, isStrong(operation), client);
     }
 
-    private boolean isStrong() {
-        return (Math.random() * 20) <= 1;
+    private boolean isStrong(Operation operation) {
+        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
+        return sqlString.matches("^.*call\\s+buy_now.*$") ||
+                sqlString.matches("^.*insert\\s+into\\s+users.*$");
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
-    public void invoke(Operation operation, boolean isStrong, CreekClient client) {
+    public synchronized void invoke(Operation operation, boolean isStrong, CreekClient client) {
         currentEventNumber++;
         EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
         Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -132,6 +134,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
         EventID eventID = EventID.fromCabMessageId(messageID);
         boolean test = checkDep(eventID);
         if (!test) {
+            log.debug("Async tested false, saving callback");
             callbackMap.put(eventID, predicateCallback);
             return false;
         }
@@ -140,8 +143,10 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
 
     // upon RB-deliver(r : Req)
     @Override
-    public void operationRequestHandler(Request request) {
+    public synchronized void operationRequestHandler(Request request) {
+        log.debug("Creek: OperationRequestHandler {}", request.toString());
         if (request.getRequestID().getReplica() == replicaId) {
+            checkWaitingPredicates();
             return;
         }
         if (!request.isStrong() || casualCtx.containsAll(request.getCasualCtx())) {
@@ -186,7 +191,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
     }
 
     // procedure commit(r : Req)
-    private void commit(Request request) {
+    private synchronized void commit(Request request) {
         List<Request> committedExt = tentative.stream()
                 .filter(tentativeRequest -> request.getCasualCtx().contains(tentativeRequest.getRequestID()))
                 .collect(Collectors.toList());
@@ -205,7 +210,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
         strongOpsToCheck.add(request);
         strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
             ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
-            if (responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
+            if (responseHandler != null && responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
                 responseToClient(request, responseHandler);
                 reqsAwaitingResp.remove(strongOpsToCheckRequest);
             }
@@ -214,7 +219,7 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
 
     //upon CAB-deliver(id : pair〈int, int〉)
     @Override
-    public void cabDelver(CabMessageID cabMessageID) {
+    public synchronized void cabDelver(CabMessageID cabMessageID) {
         log.debug("CAB Delivered: {}", cabMessageID);
         tentative.stream()
                 .filter(request -> request.getRequestID().toCabMessageId().equals(cabMessageID))
@@ -296,8 +301,8 @@ public class Creek implements CreekProtocol.Iface, CabDeliverListener, CabPredic
                         responseToClient(request, response);
                         reqsAwaitingResp.remove(request);
                     } else if (tentative.contains(request)) {
-                        ResponseHandler responseHandler = updateReqsAwaitingResponse(request, response);
-                        responseToClient(request, responseHandler);
+                        updateReqsAwaitingResponse(request, response);
+                        //responseToClient(request, responseHandler);
                     } else {
                         responseToClient(request, response);
                         reqsAwaitingResp.remove(request);

@@ -249,15 +249,6 @@ public class CabMessage implements org.apache.thrift.TBase<CabMessage, CabMessag
         return false;
     }
 
-    boolean this_present_predicateId = true && this.isSetPredicateId();
-    boolean that_present_predicateId = true && that.isSetPredicateId();
-    if (this_present_predicateId || that_present_predicateId) {
-      if (!(this_present_predicateId && that_present_predicateId))
-        return false;
-      if (this.predicateId != that.predicateId)
-        return false;
-    }
-
     return true;
   }
 

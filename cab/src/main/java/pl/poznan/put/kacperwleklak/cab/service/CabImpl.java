@@ -88,7 +88,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
     }
 
     //upon BroadcastMessage(UUIDm, q)
-    public void broadcastEventHandler(CabMessage cabMessage) {
+    public synchronized void broadcastEventHandler(CabMessage cabMessage) {
         log.debug("Received CabBroadcastMessage: {}", cabMessage);
         if (!isLeader) {
             log.error("Unable to broadcast message. Not a leader!");
@@ -100,7 +100,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
     }
 
     //upon Propose(UUIDm, d, receivedSequenceNumber, q)
-    public void proposeEventHandler(CabProposeMessage cabProposeMessage) {
+    public synchronized void proposeEventHandler(CabProposeMessage cabProposeMessage) {
         log.debug("Received CabProposeMessage: {}", cabProposeMessage);
         if (cabProposeMessage.getSequenceNumber() != sequenceNumber) {
             log.error("Received proposition with invalid sequence number");
@@ -117,7 +117,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
     }
 
     //upon Accept(UUIDm, receivedSequenceNumber)
-    public void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
+    public synchronized void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
         log.debug("Received CabAcceptMessage: {}", cabAcceptMessage);
         if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
             log.error("Received proposition with invalid sequence number");
@@ -145,8 +145,8 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
         if (index == nextIndexToDeliver) {
             CabMessage cabMessage = received.get(index);
             if (isPredicateTrue(cabMessage)) {
-                cabDeliver(messageID);
                 nextIndexToDeliver++;
+                cabDeliver(messageID);
                 if (waitingToDeliver.get(nextIndexToDeliver) != null) {
                     CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
                     deliverMessage(removedMessageIndex);
@@ -169,7 +169,8 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
 
     //upon PredicateBecomesTrue - check if any predicate becomes true due to creek message deliver
     @Override
-    public synchronized void predicateBecomesTrue(int predicateId, CabMessageID msg) {
+    public void predicateBecomesTrue(int predicateId, CabMessageID msg) {
+        log.debug("Async predicate becomes true: {}", msg);
         CabMessage nextToBeDelivered = received.get(nextIndexToDeliver);
         if (nextToBeDelivered == null) {
             return;

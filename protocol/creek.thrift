@@ -27,7 +27,5 @@ struct EventID {
 }
 
 service CreekProtocol {
-
     oneway void operationRequestHandler(1:Request request)
-
 }

@@ -1,9 +1,12 @@
 package pl.poznan.put.kacperwleklak.reliablechannel.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.thrift.TException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
@@ -16,6 +19,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 @Slf4j
+//@Service
 public class ReliableChannelImpl implements ReliableChannel {
 
     private final List<String> replicasAddresses;
@@ -24,6 +28,7 @@ public class ReliableChannelImpl implements ReliableChannel {
     private final List<ReliableChannelDeliverListener> listeners;
     private final Map<String, TcpClientSocket> connections;
 
+    @Autowired
     public ReliableChannelImpl(@Value("${communication.replicas.nodes}") List<String> replicasAddresses,
                                TcpServerSocket serverSocket) {
         this.replicasAddresses = replicasAddresses;
@@ -46,7 +51,13 @@ public class ReliableChannelImpl implements ReliableChannel {
         return message -> listeners.forEach(listener -> {
             byte[] msgCopy = new byte[65_536];
             System.arraycopy(message, 0, msgCopy, 0, 65_536);
-            listener.rDeliver(msgCopy);
+            byte msgType = -1;
+            try {
+                msgType = ThriftSerializer.getMsgType(msgCopy);
+            } catch (TException e) {
+                e.printStackTrace();
+            }
+            listener.rDeliver(msgType, msgCopy);
         });
     }
 
@@ -72,8 +83,7 @@ public class ReliableChannelImpl implements ReliableChannel {
         listeners.add(deliverListener);
     }
 
-    @Async
     void sendAsyncMessage(TcpClientSocket tcpClientSocket, byte[] msg) {
-        tcpClientSocket.sendMessage(msg);
+        new Thread(() ->tcpClientSocket.sendMessage(msg)).start();
     }
 }

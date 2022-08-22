@@ -1,0 +1,9 @@
+set PG_PORT=5435
+set DBNAME=./creek3
+set COMMUNICATION_REPLICAS_PORT=10003
+set COMMUNICATION_REPLICAS_HOST=localhost
+set SERVER_PORT=8083
+set COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004
+set COMMUNICATION_REPLICAS_ID=3
+
+java -jar ..\..\creek-impl\target\creek-impl-0.0.1-SNAPSHOT.jar

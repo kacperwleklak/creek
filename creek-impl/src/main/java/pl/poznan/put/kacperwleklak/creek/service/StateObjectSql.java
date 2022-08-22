@@ -1,7 +1,6 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.Data;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.h2.api.ErrorCode;
 import org.h2.command.Command;
@@ -40,8 +39,8 @@ public class StateObjectSql implements StateObject {
             List.of("users", "items", "old_items", "bids", "comments", "buy_now", "ids");
 
     private static final String SELECT_VERSION_RECORDS_FORMAT = "SELECT * FROM %s_history WHERE version = %d;";
-    private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE id = %s;";
-    private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE id = %s;";
+    private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE id = '%s';";
+    private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE id = '%s';";
 
 
     private SortedMap<Request, Long> undoLog;
@@ -61,29 +60,46 @@ public class StateObjectSql implements StateObject {
         session = initSessionMySQL();
     }
 
-    public synchronized void rollback(Request request) {
-        log.debug("Rolling back {}", request.toString());
-        rollbackSqlOperations(request);
-        undoLog.remove(request);
+    public void rollback(Request request) {
+        synchronized (this) {
+            log.debug("Rolling back {}", request);
+            rollbackSqlOperations(request);
+            undoLog.remove(request);
+            log.debug("Rollback done {}", request);
+        }
     }
 
-    @SneakyThrows
-    public synchronized Response execute(Request request) {
-        long version = bumpVersion();
-        undoLog.put(request, version);
-        Operation operation = request.getOperation();
-        switch (operation.getAction()) {
-            case EXECUTE:
-                return executePrepared(operation.getSql());
-            case QUERY:
-                return executeQuery(operation.getSql());
-            default:
-                throw new UnsupportedOperationException();
+    public Response execute(Request request) {
+        try {
+            synchronized (this) {
+                long version = bumpVersion();
+                undoLog.put(request, version);
+                Operation operation = request.getOperation();
+                Response response;
+                long start = System.currentTimeMillis();
+                switch (operation.getAction()) {
+                    case EXECUTE:
+                        response = executePrepared(operation.getSql());
+                        break;
+                    case QUERY:
+                        response = executeQuery(operation.getSql());
+                        break;
+                    default:
+                        throw new UnsupportedOperationException();
+                }
+                long finish = System.currentTimeMillis();
+                log.info("SQL: {} took {} ms", operation.getSql(), finish - start);
+                return response;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
+        return new Response();
     }
 
     private void rollbackSqlOperations(Request request) {
         long version = undoLog.get(request);
+        log.debug("Version to rollback: {}", version);
         VERSIONABLE_TABLES.forEach(table -> rollbackVersionFromTable(version, table));
     }
 
@@ -95,8 +111,10 @@ public class StateObjectSql implements StateObject {
             Value[] values = rowsToRollback.currentRow();
             boolean isInserted = values[1].getBoolean();
             if (isInserted) {
-                deleteRecord(values[3].getString(), table);
+                log.debug("Rollback: removing record {}", (Object) values);
+                deleteRecord(values[2].getString(), table);
             } else {
+                log.debug("Rollback: getting last value of {}", (Object) values);
                 setLatestRowValue(rowsToRollback, table);
             }
         }

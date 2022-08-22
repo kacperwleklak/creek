@@ -4,11 +4,12 @@ include "cab.thrift"
 
 
 struct Request {
-    1: i64 timestamp,
-    2: EventID requestID,
-    3: Operation operation,
-    4: bool strong,
-    5: optional set<EventID> casualCtx
+    1: i8 msgType = 1,
+    2: i64 timestamp,
+    3: EventID requestID,
+    4: Operation operation,
+    5: bool strong,
+    6: optional set<EventID> casualCtx
 }
 
 enum Action {
@@ -24,8 +25,4 @@ struct Operation {
 struct EventID {
     1: i8 replica;
     2: i64 operationId;
-}
-
-service CreekProtocol {
-    oneway void operationRequestHandler(1:Request request)
 }

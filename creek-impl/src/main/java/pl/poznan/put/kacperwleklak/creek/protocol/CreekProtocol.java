@@ -53,7 +53,7 @@ public class CreekProtocol {
       send_operationRequestHandler(request);
     }
 
-    public synchronized void send_operationRequestHandler(Request request) throws org.apache.thrift.TException
+    public void send_operationRequestHandler(Request request) throws org.apache.thrift.TException
     {
       operationRequestHandler_args args = new operationRequestHandler_args();
       args.setRequest(request);
@@ -113,7 +113,7 @@ public class CreekProtocol {
       super(protocolFactory, clientManager, transport);
     }
 
-    public synchronized void operationRequestHandler(Request request, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
+    public void operationRequestHandler(Request request, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws org.apache.thrift.TException {
       operationRequestHandler_call method_call = new operationRequestHandler_call(request, resultHandler, this, ___protocolFactory, ___transport);
       this.___currentMethod = method_call;
       ___manager.call(method_call);

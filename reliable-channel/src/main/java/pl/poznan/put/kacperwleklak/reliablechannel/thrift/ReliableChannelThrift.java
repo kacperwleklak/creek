@@ -19,14 +19,14 @@ import java.util.List;
 import java.util.function.Consumer;
 
 @Slf4j
-@Service
+//@Service
 public class ReliableChannelThrift {
 
     private List<ThriftClient> nodes;
     private TMultiplexedProcessor processor;
     private TNonblockingServer server;
 
-    @Autowired
+    //@Autowired
     public ReliableChannelThrift(@Value("${communication.replicas.nodes}") List<String> nodesAddresses) {
         try {
             this.nodes = new ArrayList<>();

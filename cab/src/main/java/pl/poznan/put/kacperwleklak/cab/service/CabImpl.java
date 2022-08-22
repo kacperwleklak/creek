@@ -1,6 +1,7 @@
 package pl.poznan.put.kacperwleklak.cab.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.apache.thrift.async.TAsyncClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,9 +14,11 @@ import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.*;
 import pl.poznan.put.kacperwleklak.common.structures.IncrementalIndexList;
+import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
+import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
+import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
-import pl.poznan.put.kacperwleklak.reliablechannel.thrift.ReliableChannelThrift;
 
 import javax.annotation.PostConstruct;
 import java.util.HashSet;
@@ -28,13 +31,13 @@ import java.util.function.Consumer;
 @Slf4j
 @Component
 @DependsOn({"messageUtils"})
-public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
+public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDeliverListener {
 
     private static final String CAB_PROTOCOL = "CabProtocol";
 
     // state holders
     private final int sequenceNumber;
-    private int nextIndexToDeliver;
+    private long nextIndexToDeliver;
     private Map<Integer, CabPredicate> predicates;
 
     // message holders
@@ -47,16 +50,16 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
     private int replicasNumber;
 
     // communication and listeners
-    private final ReliableChannelThrift reliableChannel;
+    private final ReliableChannel reliableChannel;
     private final Set<CabDeliverListener> listeners;
 
     @Autowired
-    public CabImpl(ReliableChannelThrift reliableChannel,
+    public CabImpl(ReliableChannel reliableChannel,
                    @Value("${communication.replicas.nodes}") List<String> replicasAddresses,
                    @Value("${communication.replicas.host}") String myHost,
                    @Value("${communication.replicas.port}") int myPort) {
         this.sequenceNumber = 0;
-        this.nextIndexToDeliver = 0;
+        this.nextIndexToDeliver = 0L;
         this.received = new IncrementalIndexList<>();
         this.waitingToDeliver = new IncrementalIndexList<>();
         this.acceptsReceived = new ConcurrentHashMap<>();
@@ -67,9 +70,7 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
 
     @PostConstruct
     public void postConstruct() {
-        reliableChannel.registerService(CAB_PROTOCOL,
-                new CabProtocol.Processor<>(this),
-                new CabProtocol.AsyncClient.FactoryBuilder());
+        reliableChannel.registerListener(this);
     }
 
     public void setupReplicasValues(List<String> replicasAddresses, String host, int port) {
@@ -82,21 +83,24 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
 
     @Override
     public void cabCast(CabMessageID messageID, int predicateId) {
+        log.debug("Cab Casting: {}", messageID);
         CabMessage cabMessage = new CabMessage(messageID);
         cabMessage.setPredicateId(Integer.valueOf(predicateId).byteValue());
-        reliableChannel.rSend(leaderAddr, CAB_PROTOCOL, broadcastMessageConsumer(cabMessage));
+        CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage(cabMessage);
+        broadcast(cabBroadcastMessage);
     }
 
     //upon BroadcastMessage(UUIDm, q)
-    public synchronized void broadcastEventHandler(CabMessage cabMessage) {
-        log.debug("Received CabBroadcastMessage: {}", cabMessage);
+    public void broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) {
+        log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
         if (!isLeader) {
             log.error("Unable to broadcast message. Not a leader!");
             return;
         }
+        CabMessage cabMessage = cabBroadcastMessage.getCabMessage();
         long index = received.add(cabMessage);
         CabProposeMessage cabProposeMessage = new CabProposeMessage(cabMessage, index, sequenceNumber);
-        broadcast(proposeMessageConsumer(cabProposeMessage));
+        broadcast(cabProposeMessage);
     }
 
     //upon Propose(UUIDm, d, receivedSequenceNumber, q)
@@ -113,11 +117,11 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
         received.put(cabProposeMessage.getIndex(), cabProposeMessage.getMessage());
         CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getMessage().getMessageID(),
                 cabProposeMessage.getSequenceNumber());
-        broadcast(acceptMessageConsumer(cabAcceptMessage));
+        broadcast(cabAcceptMessage);
     }
 
     //upon Accept(UUIDm, receivedSequenceNumber)
-    public synchronized void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
+    public void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
         log.debug("Received CabAcceptMessage: {}", cabAcceptMessage);
         if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
             log.error("Received proposition with invalid sequence number");
@@ -136,26 +140,39 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
         return cabPredicate.testAsync(cabMessage.getMessageID(), this);
     }
 
-    private void broadcast(Consumer<TAsyncClient> clientConsumer) {
-        reliableChannel.rCast(CAB_PROTOCOL, clientConsumer);
+    private void broadcast(TBase msg) {
+        log.debug("Casting: {}", msg);
+        byte[] serialized;
+        try {
+            serialized = ThriftSerializer.serialize(msg);
+        } catch (TException e) {
+            log.error("Error serializing {}, {}", msg, e.getMessage());
+            throw new RuntimeException(e);
+        }
+        reliableChannel.rCast(serialized);
     }
 
-    private synchronized void deliverMessage(CabMessageID messageID) {
-        long index = received.indexOf(new CabMessage(messageID));
-        if (index == nextIndexToDeliver) {
-            CabMessage cabMessage = received.get(index);
-            if (isPredicateTrue(cabMessage)) {
-                nextIndexToDeliver++;
-                cabDeliver(messageID);
-                if (waitingToDeliver.get(nextIndexToDeliver) != null) {
-                    CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
-                    deliverMessage(removedMessageIndex);
+    private void deliverMessage(CabMessageID messageID) {
+        synchronized (this) {
+            log.debug("CAB: Trying to deliver message {}", messageID);
+            long index = received.indexOf(new CabMessage(messageID));
+            if (index == nextIndexToDeliver) {
+                CabMessage cabMessage = received.get(index);
+                if (isPredicateTrue(cabMessage)) {
+                    nextIndexToDeliver++;
+                    cabDeliver(messageID);
+                    if (waitingToDeliver.get(nextIndexToDeliver) != null) {
+                        CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
+                        deliverMessage(removedMessageIndex);
+                    }
+                } else {
+                    waitingToDeliver.put(index, messageID);
                 }
-            } else {
+            } else if (index > nextIndexToDeliver) {
                 waitingToDeliver.put(index, messageID);
+            } else {
+                log.debug("Not delivering messages once delivered");
             }
-        } else if (index > nextIndexToDeliver) {
-            waitingToDeliver.put(index, messageID);
         }
     }
 
@@ -219,5 +236,33 @@ public class CabImpl implements CAB, CabPredicateCallback, CabProtocol.Iface {
                 e.printStackTrace();
             }
         };
+    }
+
+    @Override
+    public void rDeliver(byte msgType, byte[] msg) {
+        try {
+            switch (msgType) {
+                case (byte) 2:
+                    log.debug("Deserializing CabBroadcastMessage");
+                    CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
+                    ThriftSerializer.deserialize(cabBroadcastMessage, msg);
+                    broadcastEventHandler(cabBroadcastMessage);
+                    break;
+                case (byte) 3:
+                    log.debug("Deserializing CabAcceptMessage");
+                    CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
+                    ThriftSerializer.deserialize(cabAcceptMessage, msg);
+                    acceptEventHandler(cabAcceptMessage);
+                    break;
+                case (byte) 4:
+                    log.debug("Deserializing CabProposeMessage");
+                    CabProposeMessage cabProposeMessage = new CabProposeMessage();
+                    ThriftSerializer.deserialize(cabProposeMessage, msg);
+                    proposeEventHandler(cabProposeMessage);
+                    break;
+            }
+        } catch (TException e) {
+            e.printStackTrace();
+        }
     }
 }

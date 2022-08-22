@@ -1,14 +1,16 @@
 namespace java pl.poznan.put.kacperwleklak.cab.protocol
 
 struct CabAcceptMessage {
-    1: CabMessageID messageId,
-    2: i64 sequenceNumber
+    1: i8 msgType = 3,
+    2: CabMessageID messageId,
+    3: i64 sequenceNumber
 }
 
 struct CabProposeMessage {
-    1: CabMessage message,
-    2: i64 index,
-    3: i64 sequenceNumber
+    1: i8 msgType = 4,
+    2: CabMessage message,
+    3: i64 index,
+    4: i64 sequenceNumber
 }
 
 struct CabMessageID {
@@ -21,10 +23,7 @@ struct CabMessage {
     2: optional i8 predicateId
 }
 
-service CabProtocol {
-
-    oneway void acceptEventHandler(1:CabAcceptMessage acceptMessage),
-    oneway void broadcastEventHandler(1:CabMessage cabMessage),
-    oneway void proposeEventHandler(1:CabProposeMessage proposeMessage)
-
+struct CabBroadcastMessage {
+    1: i8 msgType = 2,
+    2: CabMessage cabMessage
 }

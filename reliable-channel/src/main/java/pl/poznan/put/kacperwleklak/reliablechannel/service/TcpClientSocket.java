@@ -30,10 +30,11 @@ public class TcpClientSocket {
                 openConnection();
             }
             buffer = ByteBuffer.wrap(message);
-            client.write(buffer);
+            int bytes = client.write(buffer);
+            log.debug("Sending message to {}:{}, {} bytes", host, port, bytes);
             buffer.clear();
         } catch (IOException e) {
-            log.error(e.getMessage());
+            e.printStackTrace();
         }
     }
 

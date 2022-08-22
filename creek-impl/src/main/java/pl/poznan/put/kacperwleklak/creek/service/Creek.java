@@ -2,7 +2,6 @@ package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
-import org.apache.thrift.async.TAsyncClient;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,10 +14,10 @@ import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
+import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
 import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
 import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
-import pl.poznan.put.kacperwleklak.creek.protocol.CreekProtocol;
 import pl.poznan.put.kacperwleklak.creek.protocol.EventID;
 import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
@@ -26,14 +25,11 @@ import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
 import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
-import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
 
 import javax.annotation.PostConstruct;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.CopyOnWriteArrayList;
-import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -70,11 +66,11 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
                  @Value("${communication.replicas.id}") int replicaId) throws SQLException {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
-        this.tentative = new CopyOnWriteArrayList<>();
-        this.committed = new CopyOnWriteArrayList<>();
-        this.executed = new CopyOnWriteArrayList<>();
-        this.toBeExecuted = new CopyOnWriteArrayList<>();
-        this.toBeRolledBack = new CopyOnWriteArrayList<>();
+        this.tentative = new ArrayList<>();
+        this.committed = new ArrayList<>();
+        this.executed = new ArrayList<>();
+        this.toBeExecuted = new ArrayList<>();
+        this.toBeRolledBack = new ArrayList<>();
         this.reqsAwaitingResp = new HashMap<>();
         this.missingContextOps = new HashSet<>();
         this.callbackMap = new HashMap<>();
@@ -103,14 +99,16 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean isStrong(Operation operation) {
-        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
-        return sqlString.matches("^.*call\\s+buy_now.*$") ||
-                sqlString.matches("^.*insert\\s+into\\s+users.*$");
+        return new Random().nextInt(60) == 5;
+//        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
+//        return sqlString.matches("^.*call\\s+buy_now.*$") ||
+//                sqlString.matches("^.*insert\\s+into\\s+users.*$");
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
     public void invoke(Operation operation, boolean isStrong, CreekClient client) {
         synchronized (this) {
+            long start = System.currentTimeMillis();
             currentEventNumber++;
             EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -127,6 +125,8 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             casualCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
+            long finish = System.currentTimeMillis();
+            log.info("Insert and Execute operation took {} ms", finish - start);
         }
     }
 
@@ -150,7 +150,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     // upon RB-deliver(r : Req)
     public void operationRequestHandler(Request request) {
         synchronized (this) {
-            log.debug("Creek: OperationRequestHandler {}", request.toString());
+            log.debug("Creek: OperationRequestHandler {}", request.getRequestID());
             if (request.getRequestID().getReplica() == (byte) replicaId) {
                 log.debug("Creek: Operation request from myself, skipping");
                 checkWaitingPredicates();
@@ -228,11 +228,13 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     //upon CAB-deliver(id : pair〈int, int〉)
     @Override
     public void cabDelver(CabMessageID cabMessageID) {
-        log.debug("CAB Delivered: {}", cabMessageID);
-        tentative.stream()
-                .filter(request -> request.getRequestID().toCabMessageId().equals(cabMessageID))
-                .findAny()
-                .ifPresent(this::commit);
+        synchronized (this) {
+            log.debug("CAB Delivered: {}", cabMessageID);
+            tentative.stream()
+                    .filter(request -> request.getRequestID().toCabMessageId().equals(cabMessageID))
+                    .findAny()
+                    .ifPresent(this::commit);
+        }
     }
 
     private long getCurrentTime() {
@@ -240,7 +242,6 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private void broadcast(Request request) {
-        //reliableChannel.rCast(CREEK_PROTOCOL, clientConsumer);
         try {
             reliableChannel.rCast(ThriftSerializer.serialize(request));
         } catch (TException e) {
@@ -261,10 +262,11 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     private void adjustExecution(List<Request> newOrder) {
         synchronized (this) {
-            List<Request> inOrder = CollectionUtils.longestCommonPrefix(executed, newOrder);
-            List<Request> outOfOrder = CollectionUtils.differenceToList(executed, inOrder);
+            CommonPrefixResult<Request> commonPrefixResult = CollectionUtils.longestCommonPrefix(executed, newOrder);
+            List<Request> inOrder = commonPrefixResult.getCommonPrefix();
+            List<Request> outOfOrder = commonPrefixResult.getFirstListTail();
             executed = inOrder;
-            toBeExecuted = CollectionUtils.differenceToList(newOrder, executed);
+            toBeExecuted = CollectionUtils.differenceToList(commonPrefixResult.getSecondListTail(), commonPrefixResult.getFirstListTail());
             Collections.reverse(outOfOrder);
             toBeRolledBack = CollectionUtils.concatLists(toBeRolledBack, outOfOrder);
             performExecutions();
@@ -272,11 +274,13 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean checkDep(EventID eventID) {
-        return Stream.concat(committed.stream(), tentative.stream())
-                .filter(request -> eventID.equals(request.getRequestID()))
-                .findAny()
-                .map(request -> casualCtx.containsAll(request.getCasualCtx()))
-                .orElse(false);
+        synchronized (this) {
+            return Stream.concat(committed.stream(), tentative.stream())
+                    .filter(request -> eventID.equals(request.getRequestID()))
+                    .findAny()
+                    .map(request -> casualCtx.containsAll(request.getCasualCtx()))
+                    .orElse(false);
+        }
     }
 
     private void responseToClient(Request request, Response response) {
@@ -327,26 +331,6 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
                 toBeExecutedIterator.remove();
             }
         }
-    }
-
-    private Consumer<TAsyncClient> requestOperationMessage(Request request) {
-        return tServiceClient -> {
-            try {
-                ((CreekProtocol.AsyncClient) tServiceClient).operationRequestHandler(request, new DummyThriftCallback());
-            } catch (TException e) {
-                e.printStackTrace();
-            }
-        };
-    }
-
-    /*
-     *
-     * Temporary methods only for test purposes
-     *
-     */
-
-    public StateObject getStateObject() {
-        return state;
     }
 
     @Override

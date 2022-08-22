@@ -77,18 +77,20 @@ public class StateObjectSql implements StateObject {
                 Operation operation = request.getOperation();
                 Response response;
                 long start = System.currentTimeMillis();
+                String operationSql = operation.getSql();
                 switch (operation.getAction()) {
                     case EXECUTE:
-                        response = executePrepared(operation.getSql());
+                        response = executePrepared(operationSql);
                         break;
                     case QUERY:
-                        response = executeQuery(operation.getSql());
+                        response = executeQuery(operationSql);
                         break;
                     default:
                         throw new UnsupportedOperationException();
                 }
                 long finish = System.currentTimeMillis();
-                log.info("SQL: {} took {} ms", operation.getSql(), finish - start);
+                String operationSubstr = operationSql.length() > 50 ? (operationSql.substring(0, 50) + "...") : operationSql;
+                log.info("SQL: {} took {} ms", operationSubstr, finish - start);
                 return response;
             }
         } catch (Exception e) {
@@ -252,7 +254,7 @@ public class StateObjectSql implements StateObject {
             s = "set DATESTYLE ISO";
         }
         // s = StringUtils.replaceAll(s, "i.indkey[ia.attnum-1]", "0");
-        log.trace(s + ";");
+        //log.trace(s + ";");
         return s;
     }
 

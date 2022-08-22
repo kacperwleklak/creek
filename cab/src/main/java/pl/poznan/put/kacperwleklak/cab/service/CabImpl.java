@@ -3,7 +3,6 @@ package pl.poznan.put.kacperwleklak.cab.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
-import org.apache.thrift.async.TAsyncClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
@@ -18,7 +17,6 @@ import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
-import pl.poznan.put.kacperwleklak.reliablechannel.thrift.DummyThriftCallback;
 
 import javax.annotation.PostConstruct;
 import java.util.HashSet;
@@ -26,7 +24,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Consumer;
 
 @Slf4j
 @Component
@@ -206,36 +203,6 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     @Override
     public void start(Map<Integer, CabPredicate> predicates) {
         this.predicates = predicates;
-    }
-
-    private Consumer<TAsyncClient> broadcastMessageConsumer(CabMessage cabMessage) {
-        return tServiceClient -> {
-            try {
-                ((CabProtocol.AsyncClient) tServiceClient).broadcastEventHandler(cabMessage, new DummyThriftCallback());
-            } catch (TException e) {
-                e.printStackTrace();
-            }
-        };
-    }
-
-    private Consumer<TAsyncClient> proposeMessageConsumer(CabProposeMessage cabProposeMessage) {
-        return tServiceClient -> {
-            try {
-                ((CabProtocol.AsyncClient) tServiceClient).proposeEventHandler(cabProposeMessage, new DummyThriftCallback());
-            } catch (TException e) {
-                e.printStackTrace();
-            }
-        };
-    }
-
-    private Consumer<TAsyncClient> acceptMessageConsumer(CabAcceptMessage acceptMessage) {
-        return tServiceClient -> {
-            try {
-                ((CabProtocol.AsyncClient) tServiceClient).acceptEventHandler(acceptMessage, new DummyThriftCallback());
-            } catch (TException e) {
-                e.printStackTrace();
-            }
-        };
     }
 
     @Override

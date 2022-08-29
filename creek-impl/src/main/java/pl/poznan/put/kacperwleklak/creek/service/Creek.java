@@ -85,8 +85,6 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     @PostConstruct
     public void postInitialization() throws SQLException {
-//        reliableChannel.registerService(CREEK_PROTOCOL, new CreekProtocol.Processor<>(this),
-//                new CreekProtocol.AsyncClient.FactoryBuilder());
         reliableChannel.registerListener(this);
         cab.registerListener(this);
         cab.start(Map.of(PREDICATE_ID, this));
@@ -99,10 +97,9 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean isStrong(Operation operation) {
-        return new Random().nextInt(60) == 5;
-//        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
-//        return sqlString.matches("^.*call\\s+buy_now.*$") ||
-//                sqlString.matches("^.*insert\\s+into\\s+users.*$");
+        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
+        return sqlString.matches("^.*call\\s+buy_now.*$") ||
+                sqlString.matches("^.*insert\\s+into\\s+users.*$");
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15

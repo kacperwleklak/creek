@@ -554,12 +554,8 @@ public class Request implements org.apache.thrift.TBase<Request, Request._Fields
 
     int lastComparison = 0;
 
-    lastComparison = Boolean.compare(isSetMsgType(), other.isSetMsgType());
-    if (lastComparison != 0) {
-      return lastComparison;
-    }
-    if (isSetMsgType()) {
-      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.msgType, other.msgType);
+    if (isSetTimestamp()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.timestamp, other.timestamp);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -568,8 +564,8 @@ public class Request implements org.apache.thrift.TBase<Request, Request._Fields
     if (lastComparison != 0) {
       return lastComparison;
     }
-    if (isSetTimestamp()) {
-      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.timestamp, other.timestamp);
+    if (isSetRequestID()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.requestID, other.requestID);
       if (lastComparison != 0) {
         return lastComparison;
       }
@@ -578,8 +574,12 @@ public class Request implements org.apache.thrift.TBase<Request, Request._Fields
     if (lastComparison != 0) {
       return lastComparison;
     }
-    if (isSetRequestID()) {
-      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.requestID, other.requestID);
+    lastComparison = Boolean.compare(isSetMsgType(), other.isSetMsgType());
+    if (lastComparison != 0) {
+      return lastComparison;
+    }
+    if (isSetMsgType()) {
+      lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.msgType, other.msgType);
       if (lastComparison != 0) {
         return lastComparison;
       }

@@ -99,7 +99,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             out = socket.getOutputStream();
             dataInRaw = new DataInputStream(ins);
             while (!stop) {
-                while (!activeAsyncRequest) {
+                while (!activeAsyncRequest && !stop) {
                     process();
                     if (!activeAsyncRequest) {
                         out.flush();
@@ -174,6 +174,9 @@ public class PostgresClientThread implements Runnable, CreekClient {
 
     private void process() throws IOException {
         int x;
+        if (stop) {
+            return;
+        }
         if (initDone) {
             x = dataInRaw.read();
             if (x < 0) {
@@ -1136,9 +1139,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
             stop = true;
             try {
                 session.close();
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
+            } catch (Exception e) {}
             if (socket != null) {
                 socket.close();
             }

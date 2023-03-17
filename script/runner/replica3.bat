@@ -6,4 +6,4 @@ set SERVER_PORT=8083
 set COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002,localhost:10003,localhost:10004
 set COMMUNICATION_REPLICAS_ID=3
 
-java -jar ..\..\creek-impl\target\creek-impl-0.0.1-SNAPSHOT.jar
+java -jar -Xms512m -Xmx1024m ..\..\creek-impl\target\creek-impl-0.0.1-SNAPSHOT.jar

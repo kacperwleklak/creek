@@ -38,37 +38,37 @@ services:
       - SERVER_PORT=8080
       - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
       - COMMUNICATION_REPLICAS_ID=2
-#  replica3:
-#    image: kacperwleklak/creek
-#    hostname: replica3
-#    network_mode: host
-#    expose:
-#      - "10003"
-#    ports:
-#      - "8083:8080"     # used for internal TCP communication between replicas
-#      - "5435:5432"
-#    environment:
-#      - PG_PORT=5432
-#      - DBNAME=creek
-#      - COMMUNICATION_REPLICAS_PORT=10003
-#      - COMMUNICATION_REPLICAS_HOST=replica3
-#      - SERVER_PORT=8080
-#      - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
-#      - COMMUNICATION_REPLICAS_ID=3
-#  replica4:
-#    image: kacperwleklak/creek
-#    hostname: replica4
-#    network_mode: host
-#    ports:
-#      - "8084:8080"     # used for internal TCP communication between replicas
-#      - "5436:5432"
-#    expose:
-#      - "10004"
-#    environment:
-#      - PG_PORT=5432
-#      - DBNAME=creek
-#      - COMMUNICATION_REPLICAS_PORT=10004
-#      - COMMUNICATION_REPLICAS_HOST=replica4
-#      - SERVER_PORT=8080
-#      - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
-#      - COMMUNICATION_REPLICAS_ID=4
+  replica3:
+    image: kacperwleklak/creek
+    hostname: replica3
+    network_mode: host
+    expose:
+      - "10003"
+    ports:
+      - "8083:8080"     # used for internal TCP communication between replicas
+      - "5435:5432"
+    environment:
+      - PG_PORT=5432
+      - DBNAME=creek
+      - COMMUNICATION_REPLICAS_PORT=10003
+      - COMMUNICATION_REPLICAS_HOST=replica3
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
+      - COMMUNICATION_REPLICAS_ID=3
+  replica4:
+    image: kacperwleklak/creek
+    hostname: replica4
+    network_mode: host
+    ports:
+      - "8084:8080"     # used for internal TCP communication between replicas
+      - "5436:5432"
+    expose:
+      - "10004"
+    environment:
+      - PG_PORT=5432
+      - DBNAME=creek
+      - COMMUNICATION_REPLICAS_PORT=10004
+      - COMMUNICATION_REPLICAS_HOST=replica4
+      - SERVER_PORT=8080
+      - COMMUNICATION_REPLICAS_NODES=replica1:10001,replica2:10002,replica3:10003,replica4:10004
+      - COMMUNICATION_REPLICAS_ID=4

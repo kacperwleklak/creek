@@ -168,7 +168,7 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
             } else if (index > nextIndexToDeliver) {
                 waitingToDeliver.put(index, messageID);
             } else {
-                log.debug("Not delivering messages once delivered");
+                log.info("Not delivering messages once delivered");
             }
         }
     }
@@ -184,7 +184,7 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     //upon PredicateBecomesTrue - check if any predicate becomes true due to creek message deliver
     @Override
     public void predicateBecomesTrue(int predicateId, CabMessageID msg) {
-        log.debug("Async predicate becomes true: {}", msg);
+        log.info("Async predicate becomes true: {}", msg);
         CabMessage nextToBeDelivered = received.get(nextIndexToDeliver);
         if (nextToBeDelivered == null) {
             return;

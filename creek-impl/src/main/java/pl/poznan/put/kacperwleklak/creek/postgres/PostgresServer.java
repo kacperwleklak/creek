@@ -139,7 +139,7 @@ public class PostgresServer implements Service {
      * @param e the exception
      */
     void traceError(Exception e) {
-        log.trace(e.getMessage());
+        log.error(e.getMessage());
     }
 
     @Override

@@ -76,7 +76,6 @@ public class StateObjectSql implements StateObject {
                 undoLog.put(request, version);
                 Operation operation = request.getOperation();
                 Response response;
-                long start = System.currentTimeMillis();
                 String operationSql = operation.getSql();
                 switch (operation.getAction()) {
                     case EXECUTE:
@@ -88,9 +87,6 @@ public class StateObjectSql implements StateObject {
                     default:
                         throw new UnsupportedOperationException();
                 }
-                long finish = System.currentTimeMillis();
-                String operationSubstr = operationSql.length() > 50 ? (operationSql.substring(0, 50) + "...") : operationSql;
-                log.info("SQL: {} took {} ms", operationSubstr, finish - start);
                 return response;
             }
         } catch (Exception e) {

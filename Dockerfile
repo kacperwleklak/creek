@@ -18,4 +18,13 @@ RUN mvn -f /usr/src/app/pom.xml clean package
 FROM openjdk:17-oracle
 COPY --from=build /usr/src/app/creek-impl/target/creek-impl*.jar /usr/app/creek.jar
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","/usr/app/creek.jar"]
+EXPOSE 9010
+ENTRYPOINT ["java", \
+            "-Dcom.sun.management.jmxremote=true", \
+            "-Dcom.sun.management.jmxremote.port=9010", \
+            "-Dcom.sun.management.jmxremote.local.only=false", \
+            "-Dcom.sun.management.jmxremote.authenticate=false", \
+            "-Dcom.sun.management.jmxremote.ssl=false", \
+            "-Dcom.sun.management.jmxremote.rmi.port=9010", \
+            "-Djava.rmi.server.hostname=localhost", \
+            "-jar", "/usr/app/creek.jar"]

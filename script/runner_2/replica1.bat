@@ -6,4 +6,4 @@ set SERVER_PORT=8081
 set COMMUNICATION_REPLICAS_NODES=localhost:10001,localhost:10002
 set COMMUNICATION_REPLICAS_ID=1
 
-"C:\Program Files\graalvm\bin\java" -jar -Xms512m -Xmx1024m ..\..\creek-impl\target\creek-impl-0.0.1-SNAPSHOT.jar
+java -jar -Xms512m -Xmx1024m ..\..\creek-impl\target\creek-impl-0.0.1-SNAPSHOT.jar

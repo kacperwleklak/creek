@@ -104,8 +104,8 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
     public void invoke(Operation operation, boolean isStrong, CreekClient client) {
+        long start = System.currentTimeMillis();
         synchronized (this) {
-            long start = System.currentTimeMillis();
             currentEventNumber++;
             EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -122,9 +122,9 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             casualCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
-            long finish = System.currentTimeMillis();
-            log.info("Insert and Execute operation took {} ms", finish - start);
         }
+        long finish = System.currentTimeMillis();
+        log.info("Insert and Execute operation took {} ms", finish - start);
     }
 
     @Override

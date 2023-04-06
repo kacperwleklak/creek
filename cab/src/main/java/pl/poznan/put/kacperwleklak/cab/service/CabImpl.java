@@ -209,24 +209,24 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     public void rDeliver(byte msgType, byte[] msg) {
         try {
             switch (msgType) {
-                case (byte) 2:
+                case (byte) 2 -> {
                     log.debug("Deserializing CabBroadcastMessage");
                     CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
                     ThriftSerializer.deserialize(cabBroadcastMessage, msg);
                     broadcastEventHandler(cabBroadcastMessage);
-                    break;
-                case (byte) 3:
+                }
+                case (byte) 3 -> {
                     log.debug("Deserializing CabAcceptMessage");
                     CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
                     ThriftSerializer.deserialize(cabAcceptMessage, msg);
                     acceptEventHandler(cabAcceptMessage);
-                    break;
-                case (byte) 4:
+                }
+                case (byte) 4 -> {
                     log.debug("Deserializing CabProposeMessage");
                     CabProposeMessage cabProposeMessage = new CabProposeMessage();
                     ThriftSerializer.deserialize(cabProposeMessage, msg);
                     proposeEventHandler(cabProposeMessage);
-                    break;
+                }
             }
         } catch (TException e) {
             e.printStackTrace();

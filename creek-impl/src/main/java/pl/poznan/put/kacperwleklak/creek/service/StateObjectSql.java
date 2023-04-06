@@ -77,6 +77,7 @@ public class StateObjectSql implements StateObject {
                 Operation operation = request.getOperation();
                 Response response;
                 String operationSql = operation.getSql();
+                log.debug(operationSql);
                 switch (operation.getAction()) {
                     case EXECUTE:
                         response = executePrepared(operationSql);
@@ -210,7 +211,7 @@ public class StateObjectSql implements StateObject {
         info.put("MODE", "PostgreSQL");
         info.put("DATABASE_TO_LOWER", "TRUE");
         info.put("DEFAULT_NULL_ORDERING", "HIGH");
-        String url = "jdbc:h2:./" + DB_NAME + ";AUTO_SERVER=TRUE";
+        String url = "jdbc:h2:" + DB_NAME;
         ConnectionInfo ci = new ConnectionInfo(url, info, "sa", "password");
         ci.setProperty("FORBID_CREATION", "FALSE");
         return Engine.createSession(ci);
@@ -221,7 +222,7 @@ public class StateObjectSql implements StateObject {
         info.put("MODE", "MySQL");
         info.put("DATABASE_TO_LOWER", "TRUE");
         info.put("DEFAULT_NULL_ORDERING", "HIGH");
-        String url = "jdbc:h2:./" + DB_NAME + ";AUTO_SERVER=TRUE";
+        String url = "jdbc:h2:" + DB_NAME;
         ConnectionInfo ci = new ConnectionInfo(url, info, "sa", "password");
         return Engine.createSession(ci);
     }

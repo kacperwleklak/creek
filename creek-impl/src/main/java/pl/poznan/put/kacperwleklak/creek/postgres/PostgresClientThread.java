@@ -266,7 +266,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                     info.put("MODE", "PostgreSQL");
                     info.put("DATABASE_TO_LOWER", "TRUE");
                     info.put("DEFAULT_NULL_ORDERING", "HIGH");
-                    String url = "jdbc:h2:./" + System.getenv("DBNAME");
+                    String url = "jdbc:h2:" + System.getenv("DBNAME");
                     ConnectionInfo ci = new ConnectionInfo(url, info, "sa", "password");
                     ci.setProperty("FORBID_CREATION", "FALSE");
                     String baseDir = server.getBaseDir();

@@ -30,6 +30,7 @@ import javax.annotation.PostConstruct;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -59,11 +60,13 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private final CAB cab;
     private final ReliableChannel reliableChannel;
 
+    private final double cabProbability;
+
     private final Server pgServer;
 
     @Autowired
     public Creek(CAB cab, ReliableChannel reliableChannel, @Value("${postgres.port}") String pgPort,
-                 @Value("${communication.replicas.id}") int replicaId) throws SQLException {
+                 @Value("${communication.replicas.id}") int replicaId, @Value("${cab.probability}") double cabProbability) throws SQLException {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
@@ -81,6 +84,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         PostgresServer postgresServer = new PostgresServer(this);
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
         this.state = new StateObjectSql(postgresServer);
+        this.cabProbability = cabProbability;
     }
 
     @PostConstruct
@@ -97,9 +101,11 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean isStrong(Operation operation) {
-        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
-        return sqlString.matches("^.*call\\s+buy_now.*$") ||
-                sqlString.matches("^.*insert\\s+into\\s+users.*$");
+        //TODO: remove
+//        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
+//        return sqlString.matches("^.*call\\s+buy_now.*$") ||
+//                sqlString.matches("^.*insert\\s+into\\s+users.*$");
+        return ThreadLocalRandom.current().nextDouble() < cabProbability;
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
@@ -124,7 +130,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             broadcast(request);
         }
         long finish = System.currentTimeMillis();
-        log.info("Insert and Execute operation took {} ms", finish - start);
+        log.debug("Insert and Execute operation took {} ms", finish - start);
     }
 
     @Override

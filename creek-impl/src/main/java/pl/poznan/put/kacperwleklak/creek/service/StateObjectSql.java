@@ -35,12 +35,19 @@ import java.util.regex.Pattern;
 public class StateObjectSql implements StateObject {
 
     private static final String DB_NAME = System.getenv("DBNAME");
+//    private static final List<String> VERSIONABLE_TABLES =
+//            List.of("users", "items", "old_items", "bids", "comments", "buy_now", "ids");
+//
+//    private static final String SELECT_VERSION_RECORDS_FORMAT = "SELECT * FROM %s_history WHERE version = %d;";
+//    private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE id = '%s';";
+//    private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE id = '%s';";
+
     private static final List<String> VERSIONABLE_TABLES =
-            List.of("users", "items", "old_items", "bids", "comments", "buy_now", "ids");
+            List.of("usertable");
 
     private static final String SELECT_VERSION_RECORDS_FORMAT = "SELECT * FROM %s_history WHERE version = %d;";
-    private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE id = '%s';";
-    private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE id = '%s';";
+    private static final String DELETE_ROW_FORMAT = "DELETE FROM %s WHERE YCSB_KEY = '%s';";
+    private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE YCSB_KEY = '%s';";
 
 
     private SortedMap<Request, Long> undoLog;

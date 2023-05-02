@@ -91,7 +91,7 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     public void broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) {
         log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
         if (!isLeader) {
-            log.error("Unable to broadcast message. Not a leader!");
+            log.warn("Unable to broadcast message. Not a leader!");
             return;
         }
         CabMessage cabMessage = cabBroadcastMessage.getCabMessage();
@@ -209,24 +209,24 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     public void rDeliver(byte msgType, byte[] msg) {
         try {
             switch (msgType) {
-                case (byte) 2 -> {
+                case (byte) 2:
                     log.debug("Deserializing CabBroadcastMessage");
                     CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
                     ThriftSerializer.deserialize(cabBroadcastMessage, msg);
                     broadcastEventHandler(cabBroadcastMessage);
-                }
-                case (byte) 3 -> {
+                    break;
+                case (byte) 3:
                     log.debug("Deserializing CabAcceptMessage");
                     CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
                     ThriftSerializer.deserialize(cabAcceptMessage, msg);
                     acceptEventHandler(cabAcceptMessage);
-                }
-                case (byte) 4 -> {
+                    break;
+                case (byte) 4:
                     log.debug("Deserializing CabProposeMessage");
                     CabProposeMessage cabProposeMessage = new CabProposeMessage();
                     ThriftSerializer.deserialize(cabProposeMessage, msg);
                     proposeEventHandler(cabProposeMessage);
-                }
+                    break;
             }
         } catch (TException e) {
             e.printStackTrace();

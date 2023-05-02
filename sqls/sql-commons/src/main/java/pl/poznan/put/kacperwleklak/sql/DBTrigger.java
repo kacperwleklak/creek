@@ -7,7 +7,6 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.util.Objects;
 import java.util.StringJoiner;
 
 public abstract class DBTrigger {
@@ -65,8 +64,8 @@ public abstract class DBTrigger {
         statement.setObject(2, inserted); // it's updated/deleted, not inserted
         for (int i = 0; i < objectToInsert.length; i++) {
             Object val = objectToInsert[i];
-            if (val instanceof JdbcBlob blob) {
-                statement.setBlob(i+3, blob);
+            if (val instanceof JdbcBlob) {
+                statement.setBlob(i+3, (JdbcBlob) val);
             } else {
                 statement.setObject(i+3, val);
             }

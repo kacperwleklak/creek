@@ -85,6 +85,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
         this.state = new StateObjectSql(postgresServer);
         this.cabProbability = cabProbability;
+        log.info("Cab probability: {}", cabProbability);
     }
 
     @PostConstruct

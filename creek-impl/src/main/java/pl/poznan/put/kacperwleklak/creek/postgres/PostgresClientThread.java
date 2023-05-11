@@ -100,12 +100,17 @@ public class PostgresClientThread implements Runnable, CreekClient {
             dataInRaw = new DataInputStream(ins);
             while (!stop) {
                 while (!activeAsyncRequest && !stop) {
+                    log.debug("Next process iteration");
                     process();
-                    if (!activeAsyncRequest) {
-                        out.flush();
-                    }
+                    out.flush();
+                    //Thread.sleep(0, 1);
+//                    if (!activeAsyncRequest) {
+//                        out.flush();
+//                    }
                 }
+                log.debug("while (!activeAsyncRequest && !stop) loop end");
             }
+            log.debug("while (!stop) loop end");
         } catch (EOFException e) {
             e.printStackTrace();
         } catch (Exception e) {
@@ -160,16 +165,18 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 e.printStackTrace();
             }
         });
-        try {
-            out.flush();
-        } catch (IOException ioe) {
-            ioe.printStackTrace();
-            server.trace("Disconnect");
-            close();
-        } finally {
-            log.debug("Client socket unlocked");
-            activeAsyncRequest = false;
-        }
+        setActiveAsyncRequest(false);
+        log.debug("Client socket unlocked");
+//        try {
+//            out.flush();
+//        } catch (IOException ioe) {
+//            ioe.printStackTrace();
+//            server.trace("Disconnect");
+//            close();
+//        } finally {
+//            log.debug("Client socket unlocked");
+//
+//        }
     }
 
     private void process() throws IOException {
@@ -433,7 +440,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 server.trace(prepared.sql);
                 String query = buildParametrizedQuery(prepared.sql, prep.getParameters());
                 log.debug("Client socket locked");
-                activeAsyncRequest = true;
+                setActiveAsyncRequest(true);
                 operationExecutor.executeOperation(new Operation(query, Action.EXECUTE), this);
                 break;
             }
@@ -446,7 +453,7 @@ public class PostgresClientThread implements Runnable, CreekClient {
                 server.trace("Query");
                 String query = readString();
                 log.debug("Client socket locked");
-                activeAsyncRequest = true;
+                setActiveAsyncRequest(true);
                 operationExecutor.executeOperation(new Operation(query, Action.QUERY), this);
                 break;
             }
@@ -1315,5 +1322,10 @@ public class PostgresClientThread implements Runnable, CreekClient {
         String name;
         int[] resultColumnFormat;
         Prepared prep;
+    }
+
+    private void setActiveAsyncRequest(boolean setting) {
+        log.debug("activeAsyncRequest = {}", setting);
+        activeAsyncRequest = setting;
     }
 }

@@ -95,6 +95,7 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <version>2.7.8</version>
                 <configuration>
                     <mainClass>pl.poznan.put.kacperwleklak.creek.CreekApplicationRunner</mainClass>
                     <excludes>

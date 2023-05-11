@@ -91,7 +91,6 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     public void broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) {
         log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
         if (!isLeader) {
-            log.warn("Unable to broadcast message. Not a leader!");
             return;
         }
         CabMessage cabMessage = cabBroadcastMessage.getCabMessage();

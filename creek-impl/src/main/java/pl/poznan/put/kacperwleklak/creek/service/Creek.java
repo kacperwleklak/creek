@@ -64,6 +64,8 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     private final Server pgServer;
 
+    private final Object lock = new Object();
+
     @Autowired
     public Creek(CAB cab, ReliableChannel reliableChannel, @Value("${postgres.port}") String pgPort,
                  @Value("${communication.replicas.id}") int replicaId, @Value("${cab.probability}") double cabProbability) throws SQLException {
@@ -112,7 +114,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
     public void invoke(Operation operation, boolean isStrong, CreekClient client) {
         long start = System.currentTimeMillis();
-        synchronized (this) {
+        synchronized (lock) {
             currentEventNumber++;
             EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -153,7 +155,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     // upon RB-deliver(r : Req)
     public void operationRequestHandler(Request request) {
-        synchronized (this) {
+        synchronized (lock) {
             log.debug("Creek: OperationRequestHandler {}", request.getRequestID());
             if (request.getRequestID().getReplica() == (byte) replicaId) {
                 log.debug("Creek: Operation request from myself, skipping");
@@ -232,7 +234,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     //upon CAB-deliver(id : pair〈int, int〉)
     @Override
     public void cabDelver(CabMessageID cabMessageID) {
-        synchronized (this) {
+        synchronized (lock) {
             log.debug("CAB Delivered: {}", cabMessageID);
             tentative.stream()
                     .filter(request -> request.getRequestID().toCabMessageId().equals(cabMessageID))
@@ -265,7 +267,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private void adjustExecution(List<Request> newOrder) {
-        synchronized (this) {
+        synchronized (lock) {
             CommonPrefixResult<Request> commonPrefixResult = CollectionUtils.longestCommonPrefix(executed, newOrder);
             List<Request> inOrder = commonPrefixResult.getCommonPrefix();
             List<Request> outOfOrder = commonPrefixResult.getFirstListTail();
@@ -278,7 +280,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean checkDep(EventID eventID) {
-        synchronized (this) {
+        synchronized (lock) {
             return Stream.concat(committed.stream(), tentative.stream())
                     .filter(request -> eventID.equals(request.getRequestID()))
                     .findAny()

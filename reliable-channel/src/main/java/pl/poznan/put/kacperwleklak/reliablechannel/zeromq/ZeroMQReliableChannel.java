@@ -18,31 +18,29 @@ import java.util.function.Consumer;
 @Slf4j
 public class ZeroMQReliableChannel implements ReliableChannel {
 
+    private final ZContext ctx;
     private final ZMQ.Socket publisher;
-    private final List<ReliableChannelDeliverListener> listeners;
+    private final List<ReliableChannelDeliverListener> listeners = new ArrayList<>();
 
     public ZeroMQReliableChannel(@Value("${communication.replicas.nodes}") List<String> replicasAddresses) {
-        listeners = new ArrayList<>();
+        ctx = new ZContext();
+        ZeroMQSubscriber subscriber = new ZeroMQSubscriber(ctx, messageConsumer);
         for (String replicaAddress : replicasAddresses) {
-            new Thread(new ZeroMQSubscriber(replicaAddress, messageConsumer)).start();
+            subscriber.addPublisher(replicaAddress);
         }
-        ZContext ctx = new ZContext();
+        new Thread(subscriber, "zmq-sub").start();
         publisher = ctx.createSocket(SocketType.PUB);
         publisher.bind("tcp://*:" + MessageUtils.myPort());
     }
 
     @Override
     public void rCast(byte[] msg) {
-        synchronized (this) {
-            publisher.send(msg);
-        }
+        publisher.send(msg);
     }
 
     @Override
     public void rSend(String address, byte[] msg) {
-        synchronized (this) {
-            publisher.send(msg);
-        }
+        publisher.send(msg);
     }
 
     @Override
@@ -50,22 +48,16 @@ public class ZeroMQReliableChannel implements ReliableChannel {
         listeners.add(deliverListener);
     }
 
-    private final Consumer<byte[]> messageConsumer = new Consumer<>() {
-        @Override
-        public void accept(byte[] bytes) {
-            synchronized(this) {
-                listeners.forEach(listener -> {
-                    byte msgType = -1;
-                    try {
-                        msgType = ThriftSerializer.getMsgType(bytes);
-                        log.debug("Received message type: {}", msgType);
-                    } catch (TException e) {
-                        e.printStackTrace();
-                    }
-                    listener.rDeliver(msgType, bytes);
-                });
-            }
+    private final Consumer<byte[]> messageConsumer = (bytes -> {
+        byte msgType = -1;
+        try {
+            msgType = ThriftSerializer.getMsgType(bytes);
+            log.debug("Received message type: {} from {}", msgType);
+        } catch (TException e) {
+            e.printStackTrace();
         }
-    };
+        byte finalMsgType = msgType;
+        listeners.forEach(listener -> listener.rDeliver(finalMsgType, bytes));
+    });
 
 }

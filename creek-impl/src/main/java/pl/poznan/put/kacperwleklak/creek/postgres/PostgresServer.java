@@ -121,7 +121,7 @@ public class PostgresServer implements Service {
      * @param s the message
      */
     void trace(String s) {
-        log.trace(s);
+        log.debug(s);
     }
 
     /**
@@ -130,6 +130,7 @@ public class PostgresServer implements Service {
      * @param t the thread to remove
      */
     synchronized void remove(PostgresClientThread t) {
+        t.interrupt();
         running.remove(t);
     }
 

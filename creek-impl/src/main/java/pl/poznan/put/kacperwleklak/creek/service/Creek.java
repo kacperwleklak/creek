@@ -35,12 +35,10 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Slf4j
-@Component
 @DependsOn({"messageUtils"})
 public class Creek implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
 
-    private static final int PREDICATE_ID = 1;
-    private static final String CREEK_PROTOCOL = "CREEK_PROTOCOL";
+    public static final int PREDICATE_ID = 1;
 
     // current state variables
     private int currentEventNumber;
@@ -62,13 +60,11 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     private final double cabProbability;
 
-    private final Server pgServer;
-
     private final Object lock = new Object();
 
     @Autowired
-    public Creek(CAB cab, ReliableChannel reliableChannel, @Value("${postgres.port}") String pgPort,
-                 @Value("${communication.replicas.id}") int replicaId, @Value("${cab.probability}") double cabProbability) throws SQLException {
+    public Creek(CAB cab, ReliableChannel reliableChannel, int replicaId, double cabProbability,
+                 PostgresServer postgresServer) throws SQLException {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
@@ -83,19 +79,9 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
         this.cab = cab;
         this.reliableChannel = reliableChannel;
-        PostgresServer postgresServer = new PostgresServer(this);
-        this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
         this.state = new StateObjectSql(postgresServer);
         this.cabProbability = cabProbability;
         log.info("Cab probability: {}", cabProbability);
-    }
-
-    @PostConstruct
-    public void postInitialization() throws SQLException {
-        reliableChannel.registerListener(this);
-        cab.registerListener(this);
-        cab.start(Map.of(PREDICATE_ID, this));
-        pgServer.start();
     }
 
     @Override

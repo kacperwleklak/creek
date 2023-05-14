@@ -662,16 +662,6 @@ public class Request implements org.apache.thrift.TBase<Request, Request._Fields
     sb.append("strong:");
     sb.append(this.strong);
     first = false;
-    if (isSetCasualCtx()) {
-      if (!first) sb.append(", ");
-      sb.append("casualCtx:");
-      if (this.casualCtx == null) {
-        sb.append("null");
-      } else {
-        sb.append(this.casualCtx);
-      }
-      first = false;
-    }
     sb.append(")");
     return sb.toString();
   }

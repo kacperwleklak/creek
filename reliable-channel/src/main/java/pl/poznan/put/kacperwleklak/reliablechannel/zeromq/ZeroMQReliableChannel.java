@@ -52,7 +52,7 @@ public class ZeroMQReliableChannel implements ReliableChannel {
         byte msgType = -1;
         try {
             msgType = ThriftSerializer.getMsgType(bytes);
-            log.debug("Received message type: {} from {}", msgType);
+            log.debug("Received message type: {}", msgType);
         } catch (TException e) {
             e.printStackTrace();
         }

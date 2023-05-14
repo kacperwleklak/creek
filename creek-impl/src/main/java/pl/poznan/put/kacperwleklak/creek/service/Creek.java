@@ -111,12 +111,14 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
                         .map(Request::getRequestID)
                         .collect(Collectors.toList());
                 request.setCasualCtx(CollectionUtils.differenceToSet(casualCtx, tentativeGreaterThanCurrentRequest));
-                cab.cabCast(request.getRequestID().toCabMessageId(), 1);
             }
             reqsAwaitingResp.put(request, new ResponseHandler(client));
             casualCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
+            if (isStrong) {
+                cab.cabCast(request.getRequestID().toCabMessageId(), 1);
+            }
         }
         long finish = System.currentTimeMillis();
         log.debug("Insert and Execute operation took {} ms", finish - start);
@@ -234,6 +236,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private void broadcast(Request request) {
+        log.debug("Broadcasting event {}", request);
         try {
             reliableChannel.rCast(ThriftSerializer.serialize(request));
         } catch (TException e) {
@@ -331,6 +334,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             if (msgType == (byte) 1) {
                 Request request = new Request();
                 ThriftSerializer.deserialize(request, msg);
+                log.debug("Creek handling request {}", request);
                 operationRequestHandler(request);
             }
         } catch (TException e) {

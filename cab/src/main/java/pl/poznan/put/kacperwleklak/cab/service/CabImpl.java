@@ -50,6 +50,8 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     private final ReliableChannel reliableChannel;
     private final Set<CabDeliverListener> listeners;
 
+    private final Object lock = new Object();
+
     @Autowired
     public CabImpl(ReliableChannel reliableChannel,
                    @Value("${communication.replicas.nodes}") List<String> replicasAddresses,
@@ -89,45 +91,51 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
 
     //upon BroadcastMessage(UUIDm, q)
     public void broadcastEventHandler(CabBroadcastMessage cabBroadcastMessage) {
-        log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
-        if (!isLeader) {
-            return;
+        synchronized (lock) {
+            log.debug("Received CabBroadcastMessage: {}", cabBroadcastMessage);
+            if (!isLeader) {
+                return;
+            }
+            CabMessage cabMessage = cabBroadcastMessage.getCabMessage();
+            long index = received.add(cabMessage);
+            CabProposeMessage cabProposeMessage = new CabProposeMessage(cabMessage, index, sequenceNumber);
+            broadcast(cabProposeMessage);
         }
-        CabMessage cabMessage = cabBroadcastMessage.getCabMessage();
-        long index = received.add(cabMessage);
-        CabProposeMessage cabProposeMessage = new CabProposeMessage(cabMessage, index, sequenceNumber);
-        broadcast(cabProposeMessage);
     }
 
     //upon Propose(UUIDm, d, receivedSequenceNumber, q)
-    public synchronized void proposeEventHandler(CabProposeMessage cabProposeMessage) {
-        log.debug("Received CabProposeMessage: {}", cabProposeMessage);
-        if (cabProposeMessage.getSequenceNumber() != sequenceNumber) {
-            log.error("Received proposition with invalid sequence number");
-            return;
+    public void proposeEventHandler(CabProposeMessage cabProposeMessage) {
+        synchronized (lock) {
+            log.debug("Received CabProposeMessage: {}", cabProposeMessage);
+            if (cabProposeMessage.getSequenceNumber() != sequenceNumber) {
+                log.error("Received proposition with invalid sequence number");
+                return;
+            }
+            if (received.get(cabProposeMessage.getIndex()) != null && !isLeader) {
+                log.error("Received proposition for value that currently exist!");
+                return;
+            }
+            received.put(cabProposeMessage.getIndex(), cabProposeMessage.getMessage());
+            CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getMessage().getMessageID(),
+                    cabProposeMessage.getSequenceNumber());
+            broadcast(cabAcceptMessage);
         }
-        if (received.get(cabProposeMessage.getIndex()) != null && !isLeader) {
-            log.error("Received proposition for value that currently exist!");
-            return;
-        }
-        received.put(cabProposeMessage.getIndex(), cabProposeMessage.getMessage());
-        CabAcceptMessage cabAcceptMessage = new CabAcceptMessage(cabProposeMessage.getMessage().getMessageID(),
-                cabProposeMessage.getSequenceNumber());
-        broadcast(cabAcceptMessage);
     }
 
     //upon Accept(UUIDm, receivedSequenceNumber)
     public void acceptEventHandler(CabAcceptMessage cabAcceptMessage) {
-        log.debug("Received CabAcceptMessage: {}", cabAcceptMessage);
-        if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
-            log.error("Received proposition with invalid sequence number");
-            return;
-        }
-        CabMessageID messageID = cabAcceptMessage.getMessageId();
-        acceptsReceived.putIfAbsent(messageID, 0);
-        Integer currentAcceptsReceived = acceptsReceived.computeIfPresent(messageID, (key, value) -> value + 1);
-        if (isMajority(currentAcceptsReceived)) {
-            deliverMessage(messageID);
+        synchronized (lock) {
+            log.debug("Received CabAcceptMessage: {}", cabAcceptMessage);
+            if (cabAcceptMessage.getSequenceNumber() != sequenceNumber) {
+                log.error("Received proposition with invalid sequence number");
+                return;
+            }
+            CabMessageID messageID = cabAcceptMessage.getMessageId();
+            acceptsReceived.putIfAbsent(messageID, 0);
+            Integer currentAcceptsReceived = acceptsReceived.computeIfPresent(messageID, (key, value) -> value + 1);
+            if (isMajority(currentAcceptsReceived)) {
+                deliverMessage(messageID);
+            }
         }
     }
 
@@ -149,26 +157,26 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     }
 
     private void deliverMessage(CabMessageID messageID) {
-        synchronized (this) {
-            log.debug("CAB: Trying to deliver message {}", messageID);
-            long index = received.indexOf(new CabMessage(messageID));
-            if (index == nextIndexToDeliver) {
-                CabMessage cabMessage = received.get(index);
-                if (isPredicateTrue(cabMessage)) {
-                    nextIndexToDeliver++;
-                    cabDeliver(messageID);
-                    if (waitingToDeliver.get(nextIndexToDeliver) != null) {
-                        CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
-                        deliverMessage(removedMessageIndex);
-                    }
-                } else {
-                    waitingToDeliver.put(index, messageID);
+        deliverMessage(messageID, false);
+    }
+
+    private void deliverMessage(CabMessageID messageID, boolean becameTrue) {
+        log.debug("CAB: Trying to deliver message {}", messageID);
+        long index = received.indexOf(new CabMessage(messageID));
+        if (index == nextIndexToDeliver) {
+            CabMessage cabMessage = received.get(index);
+            if (becameTrue || isPredicateTrue(cabMessage)) {
+                nextIndexToDeliver++;
+                cabDeliver(messageID);
+                if (waitingToDeliver.get(nextIndexToDeliver) != null) {
+                    CabMessageID removedMessageIndex = waitingToDeliver.remove(nextIndexToDeliver);
+                    deliverMessage(removedMessageIndex);
                 }
-            } else if (index > nextIndexToDeliver) {
-                waitingToDeliver.put(index, messageID);
             } else {
-                log.info("Not delivering messages once delivered");
+                waitingToDeliver.put(index, messageID);
             }
+        } else if (index > nextIndexToDeliver) {
+            waitingToDeliver.put(index, messageID);
         }
     }
 
@@ -183,14 +191,17 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     //upon PredicateBecomesTrue - check if any predicate becomes true due to creek message deliver
     @Override
     public void predicateBecomesTrue(int predicateId, CabMessageID msg) {
-        log.info("Async predicate becomes true: {}", msg);
+        log.debug("Async predicate becomes true: {}", msg);
         CabMessage nextToBeDelivered = received.get(nextIndexToDeliver);
+        log.debug("nextToBeDelivered {}", nextToBeDelivered);
         if (nextToBeDelivered == null) {
             return;
         }
         CabMessageID nextToBeDeliveredID = nextToBeDelivered.getMessageID();
         if (msg.equals(nextToBeDeliveredID)) {
-            deliverMessage(nextToBeDeliveredID);
+            deliverMessage(nextToBeDeliveredID, true);
+        } else {
+            log.debug("nextToBeDeliveredID {} not match current message Id {}", nextToBeDeliveredID, msg);
         }
     }
 
@@ -206,29 +217,31 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
 
     @Override
     public void rDeliver(byte msgType, byte[] msg) {
-        try {
-            switch (msgType) {
-                case (byte) 2:
-                    log.debug("Deserializing CabBroadcastMessage");
-                    CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
-                    ThriftSerializer.deserialize(cabBroadcastMessage, msg);
-                    broadcastEventHandler(cabBroadcastMessage);
-                    break;
-                case (byte) 3:
-                    log.debug("Deserializing CabAcceptMessage");
-                    CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
-                    ThriftSerializer.deserialize(cabAcceptMessage, msg);
-                    acceptEventHandler(cabAcceptMessage);
-                    break;
-                case (byte) 4:
-                    log.debug("Deserializing CabProposeMessage");
-                    CabProposeMessage cabProposeMessage = new CabProposeMessage();
-                    ThriftSerializer.deserialize(cabProposeMessage, msg);
-                    proposeEventHandler(cabProposeMessage);
-                    break;
+        synchronized (lock) {
+            try {
+                switch (msgType) {
+                    case (byte) 2:
+                        log.debug("Deserializing CabBroadcastMessage");
+                        CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
+                        ThriftSerializer.deserialize(cabBroadcastMessage, msg);
+                        broadcastEventHandler(cabBroadcastMessage);
+                        break;
+                    case (byte) 3:
+                        log.debug("Deserializing CabAcceptMessage");
+                        CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
+                        ThriftSerializer.deserialize(cabAcceptMessage, msg);
+                        acceptEventHandler(cabAcceptMessage);
+                        break;
+                    case (byte) 4:
+                        log.debug("Deserializing CabProposeMessage");
+                        CabProposeMessage cabProposeMessage = new CabProposeMessage();
+                        ThriftSerializer.deserialize(cabProposeMessage, msg);
+                        proposeEventHandler(cabProposeMessage);
+                        break;
+                }
+            } catch (TException e) {
+                e.printStackTrace();
             }
-        } catch (TException e) {
-            e.printStackTrace();
         }
     }
 }

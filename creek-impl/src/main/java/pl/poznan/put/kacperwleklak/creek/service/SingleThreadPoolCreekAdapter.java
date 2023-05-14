@@ -5,10 +5,7 @@ import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.DependsOn;
-import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
-import org.springframework.stereotype.Service;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
@@ -28,11 +25,11 @@ import java.util.Map;
 import static pl.poznan.put.kacperwleklak.creek.config.AsyncConfigurer.SINGLE_THREAD_EXECUTOR;
 import static pl.poznan.put.kacperwleklak.creek.service.Creek.PREDICATE_ID;
 
-@Service
+//@Service
+//@DependsOn({"messageUtils"})
+//@Primary
 @Slf4j
-@DependsOn({"messageUtils"})
-@Primary
-public class AsyncCreekAdapter implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
+public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
 
     private Creek creek;
     private ThreadPoolTaskExecutor singleThreadExecutor;
@@ -41,12 +38,12 @@ public class AsyncCreekAdapter implements ReliableChannelDeliverListener, CabDel
     private final Server pgServer;
 
     @Autowired
-    public AsyncCreekAdapter(@Qualifier(SINGLE_THREAD_EXECUTOR) ThreadPoolTaskExecutor singleThreadExecutor,
-                             CAB cab,
-                             ReliableChannel reliableChannel,
-                             @Value("${postgres.port}") String pgPort,
-                             @Value("${communication.replicas.id}") int replicaId,
-                             @Value("${cab.probability}") double cabProbability) throws SQLException {
+    public SingleThreadPoolCreekAdapter(@Qualifier(SINGLE_THREAD_EXECUTOR) ThreadPoolTaskExecutor singleThreadExecutor,
+                                        CAB cab,
+                                        ReliableChannel reliableChannel,
+                                        @Value("${postgres.port}") String pgPort,
+                                        @Value("${communication.replicas.id}") int replicaId,
+                                        @Value("${cab.probability}") double cabProbability) throws SQLException {
         this.singleThreadExecutor = singleThreadExecutor;
         this.cab = cab;
         this.reliableChannel = reliableChannel;
@@ -59,6 +56,7 @@ public class AsyncCreekAdapter implements ReliableChannelDeliverListener, CabDel
 
     @PostConstruct
     public void postInitialization() throws SQLException {
+        log.info("SingleThreadPoolCreekAdapter initialized");
         reliableChannel.registerListener(this);
         cab.registerListener(this);
         cab.start(Map.of(PREDICATE_ID, this));

@@ -1,10 +1,11 @@
 package pl.poznan.put.kacperwleklak.common.thrift;
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.*;
 import org.apache.thrift.annotation.Nullable;
 import org.apache.thrift.transport.TTransportException;
 
-
+@Slf4j
 public class ThriftSerializer {
 
     private static TSerializer serializer;
@@ -73,6 +74,19 @@ public class ThriftSerializer {
 
         public String getFieldName() {
             return _fieldName;
+        }
+    }
+
+    public static void assertMessage(byte[] receivedBytes, TBase decodedMsg) {
+        try {
+            byte[] encodedMsg = ThriftSerializer.serialize(decodedMsg);
+            int diff = receivedBytes.length - encodedMsg.length;
+            if (diff > 0) {
+                log.error("Multiple messages sent in one frame receivedBytes={}, encodedMsg={}, diff={}",
+                        receivedBytes.length, encodedMsg.length, diff);
+            }
+        } catch (TException e) {
+            throw new RuntimeException(e);
         }
     }
 }

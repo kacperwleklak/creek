@@ -2,11 +2,8 @@ package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
-import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.DependsOn;
-import org.springframework.stereotype.Component;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
@@ -26,10 +23,10 @@ import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
-import javax.annotation.PostConstruct;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,7 +49,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private final Map<Request, ResponseHandler> reqsAwaitingResp;
     private final Set<Request> missingContextOps;
     private final StateObject state;
-    private final HashMap<EventID, CabPredicateCallback> callbackMap;
+    private final ConcurrentHashMap<EventID, CabPredicateCallback> callbackMap;
 
     // dependencies
     private final CAB cab;
@@ -64,7 +61,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     @Autowired
     public Creek(CAB cab, ReliableChannel reliableChannel, int replicaId, double cabProbability,
-                 PostgresServer postgresServer) throws SQLException {
+                 PostgresServer postgresServer) {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
@@ -74,7 +71,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.toBeRolledBack = new ArrayList<>();
         this.reqsAwaitingResp = new HashMap<>();
         this.missingContextOps = new HashSet<>();
-        this.callbackMap = new HashMap<>();
+        this.callbackMap = new ConcurrentHashMap<>();
         this.replicaId = replicaId;
 
         this.cab = cab;
@@ -116,6 +113,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             casualCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
+            log.debug("Invoked {}", request);
             if (isStrong) {
                 cab.cabCast(request.getRequestID().toCabMessageId(), 1);
             }
@@ -138,28 +136,27 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             callbackMap.putIfAbsent(eventID, predicateCallback);
             return false;
         }
+        log.debug("Async tested true {}", eventID);
         return true;
     }
 
     // upon RB-deliver(r : Req)
     public void operationRequestHandler(Request request) {
-        synchronized (lock) {
-            log.debug("Creek: OperationRequestHandler {}", request.getRequestID());
-            if (request.getRequestID().getReplica() == (byte) replicaId) {
-                log.debug("Creek: Operation request from myself, skipping");
-                checkWaitingPredicates();
-                return;
-            }
-            if (!request.isStrong() || casualCtx.containsAll(request.getCasualCtx())) {
-                casualCtx.add(request.getRequestID());
-                List<Request> readyToScheduleOps = new ArrayList<>(List.of(request));
-                readyToScheduleOps = establishReadyToScheduleOps(readyToScheduleOps);
-                insertIntoTentative(readyToScheduleOps);
-            } else {
-                missingContextOps.add(request);
-            }
+        log.debug("Creek: OperationRequestHandler {}", request.getRequestID());
+        if (request.getRequestID().getReplica() == (byte) replicaId) {
+            log.debug("Creek: Operation request from myself, skipping");
             checkWaitingPredicates();
+            return;
         }
+        if (!request.isStrong() || casualCtx.containsAll(request.getCasualCtx())) {
+            casualCtx.add(request.getRequestID());
+            List<Request> readyToScheduleOps = new ArrayList<>(List.of(request));
+            readyToScheduleOps = establishReadyToScheduleOps(readyToScheduleOps);
+            insertIntoTentative(readyToScheduleOps);
+        } else {
+            missingContextOps.add(request);
+        }
+        checkWaitingPredicates();
     }
 
     private void checkWaitingPredicates() {
@@ -269,13 +266,11 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean checkDep(EventID eventID) {
-        synchronized (lock) {
-            return Stream.concat(committed.stream(), tentative.stream())
-                    .filter(request -> eventID.equals(request.getRequestID()))
-                    .findAny()
-                    .map(request -> casualCtx.containsAll(request.getCasualCtx()))
-                    .orElse(false);
-        }
+        return Stream.concat(committed.stream(), tentative.stream())
+                .filter(request -> eventID.equals(request.getRequestID()))
+                .findAny()
+                .map(request -> casualCtx.containsAll(request.getCasualCtx()))
+                .orElse(false);
     }
 
     private void responseToClient(Request request, Response response) {

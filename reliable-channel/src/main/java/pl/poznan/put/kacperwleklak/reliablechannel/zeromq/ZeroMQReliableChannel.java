@@ -21,26 +21,31 @@ public class ZeroMQReliableChannel implements ReliableChannel {
     private final ZContext ctx;
     private final ZMQ.Socket publisher;
     private final List<ReliableChannelDeliverListener> listeners = new ArrayList<>();
+    private final Object lock = new Object();
 
     public ZeroMQReliableChannel(@Value("${communication.replicas.nodes}") List<String> replicasAddresses) {
-        ctx = new ZContext();
+        ctx = new ZContext(replicasAddresses.size());
         ZeroMQSubscriber subscriber = new ZeroMQSubscriber(ctx, messageConsumer);
         for (String replicaAddress : replicasAddresses) {
             subscriber.addPublisher(replicaAddress);
         }
         new Thread(subscriber, "zmq-sub").start();
-        publisher = ctx.createSocket(SocketType.PUB);
+        publisher = new ZContext(1).createSocket(SocketType.PUB);
         publisher.bind("tcp://*:" + MessageUtils.myPort());
     }
 
     @Override
     public void rCast(byte[] msg) {
-        publisher.send(msg);
+        synchronized (lock) {
+            publisher.send(msg);
+        }
     }
 
     @Override
     public void rSend(String address, byte[] msg) {
-        publisher.send(msg);
+        synchronized (lock) {
+            publisher.send(msg);
+        }
     }
 
     @Override

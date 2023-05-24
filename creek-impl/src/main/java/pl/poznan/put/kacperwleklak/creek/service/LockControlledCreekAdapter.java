@@ -52,7 +52,7 @@ public class LockControlledCreekAdapter implements ReliableChannelDeliverListene
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
 
         this.creek = new Creek(cab, reliableChannel, replicaId, cabProbability, postgresServer);
-        this.lock = new ReentrantLock(true);
+        this.lock = new ReentrantLock(false);
     }
 
     @PostConstruct

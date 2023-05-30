@@ -16,7 +16,7 @@ public class AsyncConfigurer {
     public ThreadPoolTaskExecutor singleThreadExecutor() {
         ThreadPoolTaskExecutor threadPoolTaskExecutor = new ThreadPoolTaskExecutor();
         threadPoolTaskExecutor.setCorePoolSize(1);
-        threadPoolTaskExecutor.setQueueCapacity(1024);
+        threadPoolTaskExecutor.setQueueCapacity(Integer.MAX_VALUE);
         threadPoolTaskExecutor.setThreadNamePrefix("Creek-");
         threadPoolTaskExecutor.setRejectedExecutionHandler(new RejectedExecutionHandlerImpl());
         threadPoolTaskExecutor.initialize();

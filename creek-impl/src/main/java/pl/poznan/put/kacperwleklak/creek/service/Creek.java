@@ -12,6 +12,7 @@ import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
+import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
 import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
 import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
@@ -23,7 +24,6 @@ import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
-import java.sql.SQLException;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -54,6 +54,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     // dependencies
     private final CAB cab;
     private final ReliableChannel reliableChannel;
+    private final AllOpsDoneListener allOpsDoneListener;
 
     private final double cabProbability;
 
@@ -61,20 +62,21 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     @Autowired
     public Creek(CAB cab, ReliableChannel reliableChannel, int replicaId, double cabProbability,
-                 PostgresServer postgresServer) {
+                 PostgresServer postgresServer, AllOpsDoneListener allOpsDoneListener) {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
         this.tentative = new ArrayList<>();
         this.committed = new ArrayList<>();
         this.executed = new ArrayList<>();
-        this.toBeExecuted = new ArrayList<>();
-        this.toBeRolledBack = new ArrayList<>();
+        this.toBeExecuted = new LinkedList<>();
+        this.toBeRolledBack = new LinkedList<>();
         this.reqsAwaitingResp = new HashMap<>();
         this.missingContextOps = new HashSet<>();
         this.callbackMap = new ConcurrentHashMap<>();
         this.replicaId = replicaId;
 
         this.cab = cab;
+        this.allOpsDoneListener = allOpsDoneListener;
         this.reliableChannel = reliableChannel;
         this.state = new StateObjectSql(postgresServer);
         this.cabProbability = cabProbability;
@@ -261,7 +263,6 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             toBeExecuted = CollectionUtils.differenceToList(commonPrefixResult.getSecondListTail(), commonPrefixResult.getFirstListTail());
             Collections.reverse(outOfOrder);
             toBeRolledBack = CollectionUtils.concatLists(toBeRolledBack, outOfOrder);
-            performExecutions();
         }
     }
 
@@ -291,35 +292,30 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
 
-    private void performExecutions() {
+    public void executeSingleStep() {
         if (!toBeRolledBack.isEmpty()) {
-            Iterator<Request> toBeRolledBackIterator = toBeRolledBack.iterator();
-            while (toBeRolledBackIterator.hasNext()) {
-                Request request = toBeRolledBackIterator.next();
-                state.rollback(request);
-                toBeRolledBackIterator.remove();
-            }
-        }
-        if (toBeRolledBack.isEmpty() && !toBeExecuted.isEmpty()) {
-            Iterator<Request> toBeExecutedIterator = toBeExecuted.iterator();
-            while (toBeExecutedIterator.hasNext()) {
-                Request request = toBeExecutedIterator.next();
-                Response response = state.execute(request);
-                if (reqsAwaitingResp.containsKey(request)) {
-                    if (!request.isStrong()) {
-                        responseToClient(request, response);
-                        reqsAwaitingResp.remove(request);
-                    } else if (tentative.contains(request)) {
-                        updateReqsAwaitingResponse(request, response);
-                        //responseToClient(request, responseHandler);
-                    } else {
-                        responseToClient(request, response);
-                        reqsAwaitingResp.remove(request);
-                    }
+            Request request = toBeRolledBack.get(0);
+            state.rollback(request);
+            toBeRolledBack.remove(0);
+        } else if (!toBeExecuted.isEmpty()) {
+            Request request = toBeExecuted.get(0);
+            Response response = state.execute(request);
+            if (reqsAwaitingResp.containsKey(request)) {
+                if (!request.isStrong()) {
+                    responseToClient(request, response);
+                    reqsAwaitingResp.remove(request);
+                } else if (tentative.contains(request)) {
+                    updateReqsAwaitingResponse(request, response);
+                    //responseToClient(request, responseHandler);
+                } else {
+                    responseToClient(request, response);
+                    reqsAwaitingResp.remove(request);
                 }
-                executed.add(request);
-                toBeExecutedIterator.remove();
             }
+            executed.add(request);
+            toBeExecuted.remove(0);
+        } else {
+            allOpsDoneListener.notifyNothingToDo();
         }
     }
 

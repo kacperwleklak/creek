@@ -3,14 +3,19 @@ package pl.poznan.put.kacperwleklak.creek.service;
 import lombok.extern.slf4j.Slf4j;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Primary;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.stereotype.Service;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
+import pl.poznan.put.kacperwleklak.creek.concurrent.RejectedExecutionHandlerImpl;
+import pl.poznan.put.kacperwleklak.creek.concurrent.RepeatableIdleTaskExecutor;
+import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
 import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
 import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
 import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
@@ -22,36 +27,40 @@ import javax.annotation.PostConstruct;
 import java.sql.SQLException;
 import java.util.Map;
 
-import static pl.poznan.put.kacperwleklak.creek.config.AsyncConfigurer.SINGLE_THREAD_EXECUTOR;
 import static pl.poznan.put.kacperwleklak.creek.service.Creek.PREDICATE_ID;
 
-//@Service
-//@DependsOn({"messageUtils"})
-//@Primary
+@Service
+@DependsOn({"messageUtils"})
+@Primary
 @Slf4j
-public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
+@EnableAsync
+public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor, AllOpsDoneListener {
 
-    private Creek creek;
-    private ThreadPoolTaskExecutor singleThreadExecutor;
-    private ReliableChannel reliableChannel;
-    private CAB cab;
+    private final Creek creek;
+    private final RepeatableIdleTaskExecutor singleThreadExecutor;
+    private final ReliableChannel reliableChannel;
+    private final CAB cab;
     private final Server pgServer;
 
     @Autowired
-    public SingleThreadPoolCreekAdapter(@Qualifier(SINGLE_THREAD_EXECUTOR) ThreadPoolTaskExecutor singleThreadExecutor,
-                                        CAB cab,
+    public SingleThreadPoolCreekAdapter(CAB cab,
                                         ReliableChannel reliableChannel,
                                         @Value("${postgres.port}") String pgPort,
                                         @Value("${communication.replicas.id}") int replicaId,
                                         @Value("${cab.probability}") double cabProbability) throws SQLException {
-        this.singleThreadExecutor = singleThreadExecutor;
         this.cab = cab;
         this.reliableChannel = reliableChannel;
 
         PostgresServer postgresServer = new PostgresServer(this);
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
 
-        this.creek = new Creek(cab, reliableChannel, replicaId, cabProbability, postgresServer);
+        this.creek = new Creek(cab, reliableChannel, replicaId, cabProbability, postgresServer, this);
+
+        singleThreadExecutor = new RepeatableIdleTaskExecutor(creek::executeSingleStep);
+        singleThreadExecutor.setCorePoolSize(1);
+        singleThreadExecutor.setThreadNamePrefix("Creek-");
+        singleThreadExecutor.setRejectedExecutionHandler(new RejectedExecutionHandlerImpl());
+        singleThreadExecutor.initialize();
     }
 
     @PostConstruct
@@ -95,5 +104,11 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
     public void rDeliver(byte msgType, byte[] msg) {
         log.debug("async rDeliver");
         singleThreadExecutor.execute(() -> creek.rDeliver(msgType, msg));
+    }
+
+    @Override
+    public void notifyNothingToDo() {
+        log.debug("stopped operations executing");
+        singleThreadExecutor.stopRepeating();
     }
 }

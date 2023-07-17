@@ -189,6 +189,7 @@ public class PostgresServer implements Service {
         try {
             while (!stop) {
                 Socket s = serverSocket.accept();
+                s.setTcpNoDelay(true);
                 if (!allow(s)) {
                     trace("Connection not allowed");
                     s.close();

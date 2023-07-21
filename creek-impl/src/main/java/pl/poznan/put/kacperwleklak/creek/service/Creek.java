@@ -41,8 +41,8 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private int currentEventNumber;
     private final int replicaId;
     private final Set<EventID> casualCtx;
-    private List<Request> tentative;
-    private List<Request> committed;
+    private ArrayList<Request> tentative;
+    private ArrayList<Request> committed;
     private List<Request> executed;
     private List<Request> toBeExecuted;
     private List<Request> toBeRolledBack;
@@ -196,10 +196,10 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         List<Request> committedExt = tentative.stream()
                 .filter(tentativeRequest -> request.getCasualCtx().contains(tentativeRequest.getRequestID()))
                 .collect(Collectors.toList());
-        List<Request> newTentative = tentative.stream()
+        ArrayList <Request> newTentative = tentative.stream()
                 .filter(tentativeRequest -> !tentativeRequest.equals(request))
                 .filter(tentativeRequest -> !committedExt.contains(tentativeRequest))
-                .collect(Collectors.toList());
+                .collect(Collectors.toCollection(ArrayList::new));
         committed.addAll(committedExt);
         committed.add(request);
         tentative = newTentative;
@@ -267,7 +267,9 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private boolean checkDep(EventID eventID) {
-        return Stream.concat(committed.stream(), tentative.stream())
+        ArrayList<Request> commitedCopy = new ArrayList<>(this.committed);
+        ArrayList<Request> tentativeCopy = new ArrayList<>(this.tentative);
+        return Stream.concat(commitedCopy.stream(), tentativeCopy.stream())
                 .filter(request -> eventID.equals(request.getRequestID()))
                 .findAny()
                 .map(request -> casualCtx.containsAll(request.getCasualCtx()))

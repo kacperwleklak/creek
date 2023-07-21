@@ -80,18 +80,14 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
 
     @Override
     public boolean testSync(CabMessageID messageID) {
-        log.debug("async testSync");
-        return singleThreadExecutor.submitListenable(() -> creek.testSync(messageID))
-                .completable()
-                .join();
+        log.debug("sync testSync");
+        return creek.testSync(messageID);
     }
 
     @Override
     public boolean testAsync(CabMessageID messageID, CabPredicateCallback predicateCallback) {
-        log.debug("async testAsync");
-        return singleThreadExecutor.submitListenable(() -> creek.testAsync(messageID, predicateCallback))
-                .completable()
-                .join();
+        log.debug("sync testAsync");
+        return creek.testAsync(messageID, predicateCallback);
     }
 
     @Override

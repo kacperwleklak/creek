@@ -5,20 +5,11 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>pl.poznan.put.kacperwleklak</groupId>
-        <artifactId>creek</artifactId>
+        <artifactId>sqls</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <artifactId>sqls</artifactId>
-
-    <packaging>pom</packaging>
-
-    <modules>
-        <module>sql-commons</module>
-        <module>rubis</module>
-        <module>ycsb</module>
-        <module>ycsb-redblue</module>
-    </modules>
+    <artifactId>ycsb-redblue</artifactId>
 
     <properties>
         <maven.compiler.source>11</maven.compiler.source>
@@ -28,9 +19,9 @@
 
     <dependencies>
         <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>2.1.214</version>
+            <groupId>pl.poznan.put.kacperwleklak</groupId>
+            <artifactId>sql-commons</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
         </dependency>
     </dependencies>
 

@@ -4,6 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
+import pl.poznan.put.appcommon.db.OperationExecutor;
+import pl.poznan.put.appcommon.db.PostgresServer;
+import pl.poznan.put.appcommon.db.ResponseGenerator;
+import pl.poznan.put.appcommon.db.response.Response;
+import pl.poznan.put.appcommon.db.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
@@ -13,14 +18,10 @@ import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
-import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
-import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
-import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
 import pl.poznan.put.kacperwleklak.creek.protocol.EventID;
 import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
-import pl.poznan.put.kacperwleklak.creek.structure.response.Response;
-import pl.poznan.put.kacperwleklak.creek.structure.response.ResponseHandler;
+import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
@@ -48,7 +49,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private List<Request> toBeRolledBack;
     private final Map<Request, ResponseHandler> reqsAwaitingResp;
     private final Set<Request> missingContextOps;
-    private final StateObject state;
+    private final StateObjectAdapter state;
     private final ConcurrentHashMap<EventID, CabPredicateCallback> callbackMap;
 
     // dependencies
@@ -78,14 +79,15 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         this.cab = cab;
         this.allOpsDoneListener = allOpsDoneListener;
         this.reliableChannel = reliableChannel;
-        this.state = new StateObjectSql(postgresServer);
+        this.state = new StateObjectAdapter(postgresServer);
         this.cabProbability = cabProbability;
         log.info("Cab probability: {}", cabProbability);
     }
 
     @Override
-    public void executeOperation(Operation operation, CreekClient client) {
-        invoke(operation, isStrong(operation), client);
+    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation operation, ResponseGenerator client) {
+        Operation creekOperation = AppCommonConverter.fromAppCommonOperation(operation);
+        invoke(creekOperation, isStrong(creekOperation), client);
     }
 
     private boolean isStrong(Operation operation) {
@@ -97,7 +99,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
-    public void invoke(Operation operation, boolean isStrong, CreekClient client) {
+    public void invoke(Operation operation, boolean isStrong, ResponseGenerator client) {
         long start = System.currentTimeMillis();
         synchronized (lock) {
             currentEventNumber++;
@@ -196,7 +198,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         List<Request> committedExt = tentative.stream()
                 .filter(tentativeRequest -> request.getCasualCtx().contains(tentativeRequest.getRequestID()))
                 .collect(Collectors.toList());
-        ArrayList <Request> newTentative = tentative.stream()
+        ArrayList<Request> newTentative = tentative.stream()
                 .filter(tentativeRequest -> !tentativeRequest.equals(request))
                 .filter(tentativeRequest -> !committedExt.contains(tentativeRequest))
                 .collect(Collectors.toCollection(ArrayList::new));

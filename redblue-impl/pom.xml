@@ -2,17 +2,19 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
     <parent>
-        <artifactId>creek</artifactId>
         <groupId>pl.poznan.put.kacperwleklak</groupId>
+        <artifactId>creek</artifactId>
         <version>0.0.1-SNAPSHOT</version>
     </parent>
-    <modelVersion>4.0.0</modelVersion>
 
-    <artifactId>creek-impl</artifactId>
+    <artifactId>redblue-impl</artifactId>
 
     <properties>
-        <maven.compiler.release>11</maven.compiler.release>
+        <maven.compiler.source>11</maven.compiler.source>
+        <maven.compiler.target>11</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
     <dependencies>
@@ -24,11 +26,6 @@
             <groupId>org.springframework</groupId>
             <artifactId>spring-web</artifactId>
             <version>5.3.17</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.jetbrains</groupId>
@@ -48,18 +45,8 @@
         </dependency>
         <dependency>
             <groupId>pl.poznan.put.kacperwleklak</groupId>
-            <artifactId>cab</artifactId>
-            <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>pl.poznan.put.kacperwleklak</groupId>
             <artifactId>common</artifactId>
             <version>0.0.1-SNAPSHOT</version>
-        </dependency>
-        <dependency>
-            <groupId>com.h2database</groupId>
-            <artifactId>h2</artifactId>
-            <version>2.1.214</version>
         </dependency>
         <dependency>
             <groupId>com.github.jsqlparser</groupId>
@@ -80,6 +67,11 @@
             <groupId>org.mvnsearch</groupId>
             <artifactId>h2-functions-4-mysql</artifactId>
             <version>2.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <version>2.1.214</version>
         </dependency>
     </dependencies>
 
@@ -102,7 +94,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>2.7.8</version>
                 <configuration>
-                    <mainClass>pl.poznan.put.kacperwleklak.creek.CreekApplicationRunner</mainClass>
+                    <mainClass>pl.poznan.put.kacperwleklak.redblue.RedBlueApplicationRunner</mainClass>
                     <excludes>
                         <exclude>
                             <groupId>org.projectlombok</groupId>

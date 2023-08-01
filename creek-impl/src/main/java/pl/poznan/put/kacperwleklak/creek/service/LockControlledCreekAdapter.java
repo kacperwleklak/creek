@@ -13,7 +13,7 @@
 //import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 //import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
 //import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
-//import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
+//import pl.poznan.put.kacperwleklak.db.OperationExecutor;
 //import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
 //import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 //import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;

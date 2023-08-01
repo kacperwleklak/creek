@@ -13,13 +13,12 @@ import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
-import pl.poznan.put.kacperwleklak.creek.concurrent.RejectedExecutionHandlerImpl;
-import pl.poznan.put.kacperwleklak.creek.concurrent.RepeatableIdleTaskExecutor;
+import pl.poznan.put.appcommon.concurrent.RejectedExecutionHandlerImpl;
+import pl.poznan.put.appcommon.concurrent.RepeatableIdleTaskExecutor;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
-import pl.poznan.put.kacperwleklak.creek.interfaces.CreekClient;
-import pl.poznan.put.kacperwleklak.creek.interfaces.OperationExecutor;
-import pl.poznan.put.kacperwleklak.creek.postgres.PostgresServer;
-import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
+import pl.poznan.put.appcommon.db.OperationExecutor;
+import pl.poznan.put.appcommon.db.PostgresServer;
+import pl.poznan.put.appcommon.db.ResponseGenerator;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
@@ -91,7 +90,7 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
     }
 
     @Override
-    public void executeOperation(Operation operation, CreekClient client) {
+    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation operation, ResponseGenerator client) {
         log.debug("async executeOperation");
         singleThreadExecutor.execute(() -> creek.executeOperation(operation, client));
     }

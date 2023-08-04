@@ -12,6 +12,7 @@ import pl.poznan.put.appcommon.db.ResponseGenerator;
 import pl.poznan.put.appcommon.db.response.Response;
 import pl.poznan.put.appcommon.db.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
+import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.RedBlueNotificationReceiver;
 import pl.poznan.put.kacperwleklak.redblue.model.OwnRequest;
 import pl.poznan.put.kacperwleklak.redblue.protocol.EventID;
@@ -39,7 +40,7 @@ public class RedBlue implements OperationExecutor {
     private Set<EventID> casualContext = new HashSet<>();
     private Queue<OwnRequest> pendingOwnRedOps = new ArrayDeque<>();
     private final RedBlueStateObjectAdapter stateObject;
-    private final List<Request> pendingRequests = new ArrayList<>();
+    private final Map<EventID, List<Request>> pendingRequests = new HashMap<>();
 
     @Autowired
     public RedBlue(ReliableChannel reliableChannel, int replicaId, PostgresServer postgresServer, List<String> replicas,
@@ -52,21 +53,24 @@ public class RedBlue implements OperationExecutor {
         this.stateObject = new RedBlueStateObjectAdapter(postgresServer);
     }
 
+    //upon RB-deliver(r : Req)
     public void operationRequestHandler(Request request) {
         if (REPLICA_ID == request.getRequestID().getReplica()) {
             //issued locally
             return;
         }
         long reqRedNumber = request.getRedNumber();
-        if (isInCasualCtxAndRedNumberOk(request)) {
+        if (casualContext.containsAll(request.getCasualCtx())) {
             stateObject.executeShadow(request);
-            if (reqRedNumber != 0) {
+            if (reqRedNumber > 0) {
                 currentRedNumber += 1;
             }
             casualContext.add(request.getRequestID());
-            redBlueNotificationReceiver.pendingRequestsFlagIsTrue();
+            checkPendingRequests(request);
         } else {
-            pendingRequests.add(request);
+            EventID missingDot = maxEventId(request);
+            pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
+            pendingRequests.get(missingDot).add(request);
         }
     }
 
@@ -77,7 +81,7 @@ public class RedBlue implements OperationExecutor {
     }
 
     // upon pendingRequestsFlag = true
-    public void whenIsPendingRequestFlag() {
+    private void checkPendingRequests(Request newReq) {
         for (Request pendingRequest : pendingRequests) {
             if (isInCasualCtxAndRedNumberOk(pendingRequest)) {
                 stateObject.executeShadow(pendingRequest);
@@ -145,7 +149,7 @@ public class RedBlue implements OperationExecutor {
         Operation shadowOperation = generatorOpResult.getShadowOp();
         log.debug("Generated shadow op {}", shadowOperation);
         if (shadowOperation != null && shadowOperation.isSetSql()) {
-            long redNumber = 0;
+            long redNumber = -1;
             if (strongOp) {
                 redNumber = currentRedNumber += 1;
             }
@@ -174,5 +178,14 @@ public class RedBlue implements OperationExecutor {
         boolean condition = 0 <= tokenRedNumber && !pendingOwnRedOps.isEmpty();
         log.debug("isTokenRedNumberAndPendingOwnRequests = {}", condition);
         return condition;
+    }
+
+    private EventID maxEventId(Request request) {
+        Set<EventID> eventIds = CollectionUtils.differenceToSet(request.getCasualCtx(), casualContext);
+        return eventIds.stream()
+                .max(Comparator
+                        .comparing(EventID::getReplica)
+                        .thenComparing(EventID::getCurrEventNo))
+                .orElseThrow(() -> new RuntimeException("Unable to find max EventID"));
     }
 }

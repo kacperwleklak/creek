@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.db;
+package pl.poznan.put.kacperwleklak.appcommon.db;
 
 import lombok.extern.slf4j.Slf4j;
 import org.h2.api.ErrorCode;
@@ -12,8 +12,8 @@ import org.h2.table.Column;
 import org.h2.table.Table;
 import org.h2.util.*;
 import org.h2.value.*;
-import pl.poznan.put.appcommon.db.request.Operation;
-import pl.poznan.put.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
 
 import java.io.*;
 import java.math.BigDecimal;

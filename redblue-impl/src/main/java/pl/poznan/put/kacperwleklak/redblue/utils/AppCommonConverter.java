@@ -1,8 +1,7 @@
 package pl.poznan.put.kacperwleklak.redblue.utils;
 
 import lombok.experimental.UtilityClass;
-import pl.poznan.put.appcommon.db.request.EventID;
-import pl.poznan.put.appcommon.db.request.Request;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Request;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Action;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Operation;
 
@@ -13,15 +12,15 @@ public class AppCommonConverter {
         return new Request(null, toAppCommonOperation(redblueRequest.getShadowOp()));
     }
 
-    public static Operation fromAppCommonOperation(pl.poznan.put.appcommon.db.request.Operation operation) {
+    public static Operation fromAppCommonOperation(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation operation) {
         return new Operation(operation.getSql(), resolveOperationType(operation.getAction()));
     }
 
-    public static pl.poznan.put.appcommon.db.request.Operation toAppCommonOperation(Operation operation) {
-        return new pl.poznan.put.appcommon.db.request.Operation(operation.getSql(), resolveOperationType(operation.getAction()));
+    public static pl.poznan.put.kacperwleklak.appcommon.db.request.Operation toAppCommonOperation(Operation operation) {
+        return new pl.poznan.put.kacperwleklak.appcommon.db.request.Operation(operation.getSql(), resolveOperationType(operation.getAction()));
     }
 
-    private static Action resolveOperationType(pl.poznan.put.appcommon.db.request.Operation.Type type) {
+    private static Action resolveOperationType(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation.Type type) {
         switch (type) {
             case QUERY:
                 return Action.QUERY;
@@ -32,12 +31,12 @@ public class AppCommonConverter {
         }
     }
 
-    private static pl.poznan.put.appcommon.db.request.Operation.Type resolveOperationType(Action action) {
+    private static pl.poznan.put.kacperwleklak.appcommon.db.request.Operation.Type resolveOperationType(Action action) {
         switch (action) {
             case QUERY:
-                return pl.poznan.put.appcommon.db.request.Operation.Type.QUERY;
+                return pl.poznan.put.kacperwleklak.appcommon.db.request.Operation.Type.QUERY;
             case EXECUTE:
-                return pl.poznan.put.appcommon.db.request.Operation.Type.EXECUTE;
+                return pl.poznan.put.kacperwleklak.appcommon.db.request.Operation.Type.EXECUTE;
             default:
                 throw new ClassCastException("Unable to resolve operation type");
         }

@@ -1,7 +1,7 @@
-package pl.poznan.put.appcommon.db.response;
+package pl.poznan.put.kacperwleklak.appcommon.db.response;
 
 import lombok.Data;
-import pl.poznan.put.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
 
 @Data
 public class ResponseHandler {

@@ -1,10 +1,10 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
 
-import pl.poznan.put.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
 
-import pl.poznan.put.appcommon.db.response.Response;
-import pl.poznan.put.appcommon.state.StateObjectSql;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.state.StateObjectSql;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
 

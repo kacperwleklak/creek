@@ -1,8 +1,7 @@
 package pl.poznan.put.kacperwleklak.redblue.state;
 
-import lombok.AllArgsConstructor;
 import lombok.Data;
-import pl.poznan.put.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Operation;
 
 @Data

@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.db;
+package pl.poznan.put.kacperwleklak.appcommon.db;
 
 import lombok.extern.slf4j.Slf4j;
 import org.h2.api.ErrorCode;

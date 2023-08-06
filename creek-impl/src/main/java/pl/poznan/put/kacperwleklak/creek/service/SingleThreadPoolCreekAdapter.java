@@ -8,17 +8,18 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
-import pl.poznan.put.appcommon.concurrent.RejectedExecutionHandlerImpl;
-import pl.poznan.put.appcommon.concurrent.RepeatableIdleTaskExecutor;
+import pl.poznan.put.kacperwleklak.appcommon.concurrent.RejectedExecutionHandlerImpl;
+import pl.poznan.put.kacperwleklak.appcommon.concurrent.RepeatableIdleTaskExecutor;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
-import pl.poznan.put.appcommon.db.OperationExecutor;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
@@ -90,7 +91,7 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
     }
 
     @Override
-    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation operation, ResponseGenerator client) {
+    public void executeOperation(Operation operation, ResponseGenerator client) {
         log.debug("async executeOperation");
         singleThreadExecutor.execute(() -> creek.executeOperation(operation, client));
     }

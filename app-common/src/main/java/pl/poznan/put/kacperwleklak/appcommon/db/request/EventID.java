@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.db.request;
+package pl.poznan.put.kacperwleklak.appcommon.db.request;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

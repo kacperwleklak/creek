@@ -4,11 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
-import pl.poznan.put.appcommon.db.OperationExecutor;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.ResponseGenerator;
-import pl.poznan.put.appcommon.db.response.Response;
-import pl.poznan.put.appcommon.db.response.ResponseHandler;
+import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.cab.CAB;
 import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
@@ -85,7 +85,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     @Override
-    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation operation, ResponseGenerator client) {
+    public void executeOperation(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation operation, ResponseGenerator client) {
         Operation creekOperation = AppCommonConverter.fromAppCommonOperation(operation);
         invoke(creekOperation, isStrong(creekOperation), client);
     }

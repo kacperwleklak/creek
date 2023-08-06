@@ -6,11 +6,11 @@ import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
-import pl.poznan.put.appcommon.db.OperationExecutor;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.ResponseGenerator;
-import pl.poznan.put.appcommon.db.response.Response;
-import pl.poznan.put.appcommon.db.response.ResponseHandler;
+import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.RedBlueNotificationReceiver;
@@ -36,17 +36,17 @@ public class RedBlue implements OperationExecutor {
 
     private long currEventNumber = 0;
     private long currentRedNumber = 0;
-    private long tokenRedNumber = 0;
-    private Set<EventID> casualContext = new HashSet<>();
-    private Queue<OwnRequest> pendingOwnRedOps = new ArrayDeque<>();
+    private long tokenRedNumber = -1;
+    private final Set<EventID> casualContext = new HashSet<>();
+    private final Queue<OwnRequest> pendingOwnRedOps = new ArrayDeque<>();
     private final RedBlueStateObjectAdapter stateObject;
     private final Map<EventID, List<Request>> pendingRequests = new HashMap<>();
 
     @Autowired
     public RedBlue(ReliableChannel reliableChannel, int replicaId, PostgresServer postgresServer, List<String> replicas,
                    RedBlueNotificationReceiver redBlueNotificationReceiver) {
-        //TODO constructor params
         REPLICA_ID = (byte) replicaId;
+        if (REPLICA_ID == 1) tokenRedNumber = 0;
         this.replicas = replicas;
         this.reliableChannel = reliableChannel;
         this.redBlueNotificationReceiver = redBlueNotificationReceiver;
@@ -68,38 +68,39 @@ public class RedBlue implements OperationExecutor {
             casualContext.add(request.getRequestID());
             checkPendingRequests(request);
         } else {
-            EventID missingDot = maxEventId(request);
-            pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
-            pendingRequests.get(missingDot).add(request);
+            addMissingDot(request);
         }
     }
 
-    private boolean isInCasualCtxAndRedNumberOk(Request request) {
-        long reqRedNumber = request.getRedNumber();
-        return casualContext.containsAll(request.getCasualCtx()) &&
-                (reqRedNumber == 0 || reqRedNumber == currentRedNumber);
-    }
-
-    // upon pendingRequestsFlag = true
+    //procedure checkPendingRequests(newReq : Req)
     private void checkPendingRequests(Request newReq) {
-        for (Request pendingRequest : pendingRequests) {
-            if (isInCasualCtxAndRedNumberOk(pendingRequest)) {
+        List<Request> requests = pendingRequests.get(newReq.getRequestID());
+        for (Request pendingRequest : requests) {
+            if (casualContext.containsAll(pendingRequest.getCasualCtx())) {
                 stateObject.executeShadow(pendingRequest);
-                if (pendingRequest.getRedNumber() != 0) {
+                if (pendingRequest.getRedNumber() >= 0) {
                     currentRedNumber += 1;
                 }
                 casualContext.add(pendingRequest.getRequestID());
-                redBlueNotificationReceiver.pendingRequestsFlagIsTrue();
+                checkPendingRequests(pendingRequest);
+            } else {
+                addMissingDot(pendingRequest);
             }
         }
     }
 
+    private void addMissingDot(Request request) {
+        EventID missingDot = maxEventId(request);
+        pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
+        pendingRequests.get(missingDot).add(request);
+    }
+
     public void tokenTimeIsUp() {
         byte nextReplica = (byte) ((REPLICA_ID % replicas.size()) + 1);
-        log.debug("Sending token to replica {}", (int) nextReplica);
-        PassToken passTokenMsg = new PassToken(tokenRedNumber + 1, nextReplica);
+        log.debug("Sending token={} to replica {}", currentRedNumber, (int) nextReplica);
+        PassToken passTokenMsg = new PassToken(currentRedNumber, nextReplica);
         rbCast(passTokenMsg);
-        tokenRedNumber = 0;
+        tokenRedNumber = -1;
     }
 
     public void passTokenHandler(PassToken passToken) {
@@ -131,7 +132,7 @@ public class RedBlue implements OperationExecutor {
 
     @Override
     //upon invoke(op : ops(F), strongOp : boolean)
-    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation dbOperation, ResponseGenerator client) {
+    public void executeOperation(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation dbOperation, ResponseGenerator client) {
         Operation operation = AppCommonConverter.fromAppCommonOperation(dbOperation);
         executeOperation(operation, client);
     }
@@ -157,7 +158,8 @@ public class RedBlue implements OperationExecutor {
             EventID eventID = new EventID(REPLICA_ID, currEventNumber);
             Request request = new Request(eventID, redNumber, shadowOperation, strongOp, casualContext);
             rbCast(request);
-            response = stateObject.executeShadow(request);
+            Response shadowResponse = stateObject.executeShadow(request);
+            if (Objects.isNull(response)) response = shadowResponse;
             casualContext.add(eventID);
         }
         ResponseHandler responseHandler = new ResponseHandler(client);

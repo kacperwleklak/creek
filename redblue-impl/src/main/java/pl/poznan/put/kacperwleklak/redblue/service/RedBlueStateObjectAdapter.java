@@ -1,11 +1,12 @@
 package pl.poznan.put.kacperwleklak.redblue.service;
 
 
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.response.Response;
-import pl.poznan.put.appcommon.db.response.ResponseMessageStream;
-import pl.poznan.put.appcommon.state.NonVersionedStateObjectSql;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseMessageStream;
+import pl.poznan.put.kacperwleklak.appcommon.state.NonVersionedStateObjectSql;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Action;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Operation;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Request;
@@ -16,6 +17,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.util.Objects;
 
+@Slf4j
 public class RedBlueStateObjectAdapter extends NonVersionedStateObjectSql {
 
     private static final int DATA_ROW_TYPE = 'D';
@@ -69,6 +71,7 @@ public class RedBlueStateObjectAdapter extends NonVersionedStateObjectSql {
     }
 
     private String extractOperation(String fullOperationResponse) {
+        log.debug("extracting operation from {}", fullOperationResponse);
         String[] split = fullOperationResponse.split("~~~"); //leaves [0] for some protocol trash
         if (Objects.equals(split[2], ERROR_TYPE_RESPONSE) || Objects.equals(split[1], "")) {
             return null;

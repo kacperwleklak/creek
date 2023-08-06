@@ -9,9 +9,10 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Primary;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.stereotype.Service;
-import pl.poznan.put.appcommon.db.OperationExecutor;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.redblue.concurrent.PriorityCallable;
 import pl.poznan.put.kacperwleklak.redblue.concurrent.PrioritySingleThreadedPoolExecutor;
@@ -66,9 +67,9 @@ public class SingleThreadPoolRedBlueSupervisor implements ReliableChannelDeliver
     }
 
     @Override
-    public void executeOperation(pl.poznan.put.appcommon.db.request.Operation operation, ResponseGenerator client) {
+    public void executeOperation(Operation operation, ResponseGenerator client) {
         log.debug("async executeOperation");
-        executor.submit(new PriorityCallable(6, () -> redBlue.executeOperation(operation, client)));
+        executor.submit(new PriorityCallable(5, () -> redBlue.executeOperation(operation, client)));
     }
 
     @Override
@@ -79,7 +80,7 @@ public class SingleThreadPoolRedBlueSupervisor implements ReliableChannelDeliver
                 Request request = new Request();
                 ThriftSerializer.deserialize(request, msg);
                 log.debug("RedBlue handling request {}", request);
-                executor.submit(new PriorityCallable(5, () -> redBlue.operationRequestHandler(request)));
+                executor.submit(new PriorityCallable(4, () -> redBlue.operationRequestHandler(request)));
             }
             if (msgType == (byte) 1) {
                 PassToken passToken = new PassToken();
@@ -95,15 +96,9 @@ public class SingleThreadPoolRedBlueSupervisor implements ReliableChannelDeliver
     }
 
     @Override
-    public void pendingRequestsFlagIsTrue() {
-        log.debug("pendingRequestsFlagIsTrue");
-        executor.submit(new PriorityCallable(3, redBlue::whenIsPendingRequestFlag));
-    }
-
-    @Override
     public void hasTokenAndPendingOwnRedOps() {
         log.debug("pendingRequestsFlagIsTrue");
-        executor.submit(new PriorityCallable(4, redBlue::whenIsTokenRedNumberAndPendingOwnRequests));
+        executor.submit(new PriorityCallable(3, redBlue::whenIsTokenRedNumberAndPendingOwnRequests));
     }
 
     @Override

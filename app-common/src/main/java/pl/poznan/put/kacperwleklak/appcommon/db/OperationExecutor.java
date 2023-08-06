@@ -1,6 +1,6 @@
-package pl.poznan.put.appcommon.db;
+package pl.poznan.put.kacperwleklak.appcommon.db;
 
-import pl.poznan.put.appcommon.db.request.Operation;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
 
 public interface OperationExecutor {
 

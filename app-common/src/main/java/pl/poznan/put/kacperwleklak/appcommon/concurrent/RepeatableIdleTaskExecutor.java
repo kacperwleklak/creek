@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.concurrent;
+package pl.poznan.put.kacperwleklak.appcommon.concurrent;
 
 
 import lombok.Getter;

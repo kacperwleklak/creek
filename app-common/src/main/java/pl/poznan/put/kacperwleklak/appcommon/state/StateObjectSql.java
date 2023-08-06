@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.state;
+package pl.poznan.put.kacperwleklak.appcommon.state;
 
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
@@ -15,11 +15,11 @@ import org.h2.util.DateTimeUtils;
 import org.h2.util.ScriptReader;
 import org.h2.util.StringUtils;
 import org.h2.value.*;
-import pl.poznan.put.appcommon.db.request.Request;
-import pl.poznan.put.appcommon.db.response.ResponseMessageStream;
-import pl.poznan.put.appcommon.db.request.Operation;
-import pl.poznan.put.appcommon.db.PostgresServer;
-import pl.poznan.put.appcommon.db.response.Response;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Request;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseMessageStream;
+import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
+import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
+import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

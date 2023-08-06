@@ -1,4 +1,4 @@
-package pl.poznan.put.appcommon.db.response;
+package pl.poznan.put.kacperwleklak.appcommon.db.response;
 
 import lombok.Data;
 import lombok.NoArgsConstructor;

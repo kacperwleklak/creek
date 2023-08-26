@@ -17,6 +17,8 @@ import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.MessageUtils;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ThriftReliableChannelClient;
 
 import javax.annotation.PostConstruct;
 import java.util.HashSet;
@@ -28,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @DependsOn({"messageUtils"})
-public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDeliverListener {
+public class CabImpl implements CAB, CabPredicateCallback, ThriftReliableChannelClient {
 
     private static final String CAB_PROTOCOL = "CabProtocol";
 
@@ -47,13 +49,13 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     private int replicasNumber;
 
     // communication and listeners
-    private final ReliableChannel reliableChannel;
+    private final ConcurrentZMQChannelSupervisor channelSupervisor;
     private final Set<CabDeliverListener> listeners;
 
     private final Object lock = new Object();
 
     @Autowired
-    public CabImpl(ReliableChannel reliableChannel,
+    public CabImpl(ConcurrentZMQChannelSupervisor channelSupervisor,
                    @Value("${communication.replicas.nodes}") List<String> replicasAddresses,
                    @Value("${communication.replicas.host}") String myHost,
                    @Value("${communication.replicas.port}") int myPort) {
@@ -63,13 +65,13 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
         this.waitingToDeliver = new IncrementalIndexList<>();
         this.acceptsReceived = new ConcurrentHashMap<>();
         this.listeners = new HashSet<>();
-        this.reliableChannel = reliableChannel;
+        this.channelSupervisor = channelSupervisor;
         setupReplicasValues(replicasAddresses, myHost, myPort);
     }
 
     @PostConstruct
     public void postConstruct() {
-        reliableChannel.registerListener(this);
+        channelSupervisor.registerListener(this);
     }
 
     public void setupReplicasValues(List<String> replicasAddresses, String host, int port) {
@@ -145,15 +147,7 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     }
 
     private void broadcast(TBase msg) {
-        log.debug("Casting: {}", msg);
-        byte[] serialized;
-        try {
-            serialized = ThriftSerializer.serialize(msg);
-        } catch (TException e) {
-            log.error("Error serializing {}, {}", msg, e.getMessage());
-            throw new RuntimeException(e);
-        }
-        reliableChannel.rCast(serialized);
+        channelSupervisor.rCast(msg);
     }
 
     private void deliverMessage(CabMessageID messageID) {
@@ -216,32 +210,35 @@ public class CabImpl implements CAB, CabPredicateCallback, ReliableChannelDelive
     }
 
     @Override
-    public void rDeliver(byte msgType, byte[] msg) {
+    public void rbDeliver(TBase tBase) {
         synchronized (lock) {
-            try {
-                switch (msgType) {
-                    case (byte) 2:
-                        log.debug("Deserializing CabBroadcastMessage");
-                        CabBroadcastMessage cabBroadcastMessage = new CabBroadcastMessage();
-                        ThriftSerializer.deserialize(cabBroadcastMessage, msg);
-                        broadcastEventHandler(cabBroadcastMessage);
-                        break;
-                    case (byte) 3:
-                        log.debug("Deserializing CabAcceptMessage");
-                        CabAcceptMessage cabAcceptMessage = new CabAcceptMessage();
-                        ThriftSerializer.deserialize(cabAcceptMessage, msg);
-                        acceptEventHandler(cabAcceptMessage);
-                        break;
-                    case (byte) 4:
-                        log.debug("Deserializing CabProposeMessage");
-                        CabProposeMessage cabProposeMessage = new CabProposeMessage();
-                        ThriftSerializer.deserialize(cabProposeMessage, msg);
-                        proposeEventHandler(cabProposeMessage);
-                        break;
-                }
-            } catch (TException e) {
-                e.printStackTrace();
+            if (tBase instanceof CabBroadcastMessage) {
+                broadcastEventHandler((CabBroadcastMessage) tBase);
+                return;
+            }
+            if (tBase instanceof CabAcceptMessage) {
+                acceptEventHandler((CabAcceptMessage) tBase);
+                return;
+            }
+            if (tBase instanceof CabProposeMessage) {
+                proposeEventHandler((CabProposeMessage) tBase);
+                return;
             }
         }
+    }
+
+    @Override
+    public TBase resolve(byte msgType) {
+        switch (msgType) {
+            case 2: return new CabBroadcastMessage();
+            case 3: return new CabAcceptMessage();
+            case 4: return new CabProposeMessage();
+            default: return null;
+        }
+    }
+
+    @Override
+    public boolean canHandle(byte msgType) {
+        return msgType == 2 || msgType == 3 || msgType == 4;
     }
 }

@@ -1,6 +1,7 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.thrift.TBase;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -20,8 +21,11 @@ import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
 import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
 import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
 import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
+import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ThriftReliableChannelClient;
 
 import javax.annotation.PostConstruct;
 import java.sql.SQLException;
@@ -34,28 +38,24 @@ import static pl.poznan.put.kacperwleklak.creek.service.Creek.PREDICATE_ID;
 @Primary
 @Slf4j
 @EnableAsync
-public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor, AllOpsDoneListener {
+public class SingleThreadPoolCreekAdapter implements ThriftReliableChannelClient, CabDeliverListener, CabPredicate, OperationExecutor, AllOpsDoneListener {
 
     private final Creek creek;
     private final RepeatableIdleTaskExecutor singleThreadExecutor;
-    private final ReliableChannel reliableChannel;
+    private final ConcurrentZMQChannelSupervisor channelSupervisor;
     private final CAB cab;
     private final Server pgServer;
 
     @Autowired
     public SingleThreadPoolCreekAdapter(CAB cab,
-                                        ReliableChannel reliableChannel,
+                                        ConcurrentZMQChannelSupervisor channelSupervisor,
                                         @Value("${postgres.port}") String pgPort,
-                                        @Value("${communication.replicas.id}") int replicaId,
-                                        @Value("${cab.probability}") double cabProbability) throws SQLException {
+                                        @Value("${communication.replicas.id}") int replicaId) throws SQLException {
         this.cab = cab;
-        this.reliableChannel = reliableChannel;
-
+        this.channelSupervisor = channelSupervisor;
         PostgresServer postgresServer = new PostgresServer(this);
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
-
-        this.creek = new Creek(cab, reliableChannel, replicaId, cabProbability, postgresServer, this);
-
+        this.creek = new Creek(cab, channelSupervisor, replicaId, postgresServer, this);
         singleThreadExecutor = new RepeatableIdleTaskExecutor(creek::executeSingleStep);
         singleThreadExecutor.setCorePoolSize(1);
         singleThreadExecutor.setThreadNamePrefix("Creek-");
@@ -66,7 +66,7 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
     @PostConstruct
     public void postInitialization() throws SQLException {
         log.info("SingleThreadPoolCreekAdapter initialized");
-        reliableChannel.registerListener(this);
+        channelSupervisor.registerListener(this);
         cab.registerListener(this);
         cab.start(Map.of(PREDICATE_ID, this));
         pgServer.start();
@@ -97,9 +97,20 @@ public class SingleThreadPoolCreekAdapter implements ReliableChannelDeliverListe
     }
 
     @Override
-    public void rDeliver(byte msgType, byte[] msg) {
-        log.debug("async rDeliver");
-        singleThreadExecutor.execute(() -> creek.rDeliver(msgType, msg));
+    public void rbDeliver(TBase tBase) {
+        singleThreadExecutor.execute(() -> creek.rDeliver((Request) tBase));
+    }
+
+    @Override
+    public TBase resolve(byte msgType) {
+        if (msgType == 1) {
+            return new Request();
+        } else return null;
+    }
+
+    @Override
+    public boolean canHandle(byte msgType) {
+        return msgType == 1;
     }
 
     @Override

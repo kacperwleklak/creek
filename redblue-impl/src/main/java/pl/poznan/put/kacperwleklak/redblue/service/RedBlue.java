@@ -3,15 +3,12 @@ package pl.poznan.put.kacperwleklak.redblue.service;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.thrift.TBase;
-import org.apache.thrift.TException;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
 import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
 import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
 import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
 import pl.poznan.put.kacperwleklak.appcommon.db.response.Response;
 import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseHandler;
-import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.RedBlueNotificationReceiver;
 import pl.poznan.put.kacperwleklak.redblue.model.OwnRequest;
@@ -21,7 +18,7 @@ import pl.poznan.put.kacperwleklak.redblue.protocol.PassToken;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Request;
 import pl.poznan.put.kacperwleklak.redblue.state.GeneratorOpResult;
 import pl.poznan.put.kacperwleklak.redblue.utils.AppCommonConverter;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
 
 import java.util.*;
 
@@ -31,24 +28,23 @@ public class RedBlue implements OperationExecutor {
 
     private final byte REPLICA_ID;
     private final RedBlueNotificationReceiver redBlueNotificationReceiver;
-    private final ReliableChannel reliableChannel;
+    private final ConcurrentZMQChannelSupervisor concurrentZMQChannelSupervisor;
     private final List<String> replicas;
 
     private long currEventNumber = 0;
     private long currentRedNumber = 0;
     private long tokenRedNumber = -1;
-    private final Set<EventID> casualContext = new HashSet<>();
+    private final Set<EventID> causalContext = new HashSet<>();
     private final Queue<OwnRequest> pendingOwnRedOps = new ArrayDeque<>();
     private final RedBlueStateObjectAdapter stateObject;
     private final Map<EventID, List<Request>> pendingRequests = new HashMap<>();
 
-    @Autowired
-    public RedBlue(ReliableChannel reliableChannel, int replicaId, PostgresServer postgresServer, List<String> replicas,
+    public RedBlue(ConcurrentZMQChannelSupervisor concurrentZMQChannelSupervisor, int replicaId, PostgresServer postgresServer, List<String> replicas,
                    RedBlueNotificationReceiver redBlueNotificationReceiver) {
         REPLICA_ID = (byte) replicaId;
         if (REPLICA_ID == 1) tokenRedNumber = 0;
         this.replicas = replicas;
-        this.reliableChannel = reliableChannel;
+        this.concurrentZMQChannelSupervisor = concurrentZMQChannelSupervisor;
         this.redBlueNotificationReceiver = redBlueNotificationReceiver;
         this.stateObject = new RedBlueStateObjectAdapter(postgresServer);
     }
@@ -60,12 +56,12 @@ public class RedBlue implements OperationExecutor {
             return;
         }
         long reqRedNumber = request.getRedNumber();
-        if (casualContext.containsAll(request.getCasualCtx())) {
+        if (causalContext.containsAll(request.getCasualCtx())) {
             stateObject.executeShadow(request);
             if (reqRedNumber > 0) {
                 currentRedNumber += 1;
             }
-            casualContext.add(request.getRequestID());
+            causalContext.add(request.getRequestID());
             checkPendingRequests(request);
         } else {
             addMissingDot(request);
@@ -76,12 +72,12 @@ public class RedBlue implements OperationExecutor {
     private void checkPendingRequests(Request newReq) {
         List<Request> requests = pendingRequests.get(newReq.getRequestID());
         for (Request pendingRequest : requests) {
-            if (casualContext.containsAll(pendingRequest.getCasualCtx())) {
+            if (causalContext.containsAll(pendingRequest.getCasualCtx())) {
                 stateObject.executeShadow(pendingRequest);
                 if (pendingRequest.getRedNumber() >= 0) {
                     currentRedNumber += 1;
                 }
-                casualContext.add(pendingRequest.getRequestID());
+                causalContext.add(pendingRequest.getRequestID());
                 checkPendingRequests(pendingRequest);
             } else {
                 addMissingDot(pendingRequest);
@@ -156,11 +152,11 @@ public class RedBlue implements OperationExecutor {
             }
             currEventNumber += 1;
             EventID eventID = new EventID(REPLICA_ID, currEventNumber);
-            Request request = new Request(eventID, redNumber, shadowOperation, strongOp, casualContext);
+            Request request = new Request(eventID, redNumber, shadowOperation, strongOp, new HashSet<>(causalContext));
             rbCast(request);
             Response shadowResponse = stateObject.executeShadow(request);
             if (Objects.isNull(response)) response = shadowResponse;
-            casualContext.add(eventID);
+            causalContext.add(eventID);
         }
         ResponseHandler responseHandler = new ResponseHandler(client);
         responseHandler.setResponse(response);
@@ -168,12 +164,7 @@ public class RedBlue implements OperationExecutor {
     }
 
     private void rbCast(TBase message) {
-        log.debug("Broadcasting event {}", message);
-        try {
-            reliableChannel.rCast(ThriftSerializer.serialize(message));
-        } catch (TException e) {
-            e.printStackTrace();
-        }
+        concurrentZMQChannelSupervisor.rCast(message);
     }
 
     private boolean isTokenRedNumberAndPendingOwnRequests() {
@@ -183,7 +174,7 @@ public class RedBlue implements OperationExecutor {
     }
 
     private EventID maxEventId(Request request) {
-        Set<EventID> eventIds = CollectionUtils.differenceToSet(request.getCasualCtx(), casualContext);
+        Set<EventID> eventIds = CollectionUtils.differenceToSet(request.getCasualCtx(), causalContext);
         return eventIds.stream()
                 .max(Comparator
                         .comparing(EventID::getReplica)

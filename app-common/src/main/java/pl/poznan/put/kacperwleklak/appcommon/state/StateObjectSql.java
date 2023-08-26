@@ -50,7 +50,7 @@ public class StateObjectSql implements StateObject {
     private static final String UPDATE_ROW_STATEMENT = "UPDATE %s SET %s WHERE YCSB_KEY = '%s';";
 
 
-    private SortedMap<Request, Long> undoLog;
+    private final SortedMap<Request, Long> undoLog;
 
     // H2 Logic
     private SessionLocal session;
@@ -69,10 +69,10 @@ public class StateObjectSql implements StateObject {
 
     public void rollback(Request request) {
         synchronized (this) {
-            log.debug("Rolling back {}", request);
+            log.debug("Rolling back {}, undolog={}", request, undoLog);
             rollbackSqlOperations(request);
             undoLog.remove(request);
-            log.debug("Rollback done {}", request);
+            log.debug("Rollback done {}, undoLog={}", request, undoLog);
         }
     }
 
@@ -84,7 +84,6 @@ public class StateObjectSql implements StateObject {
                 Response response;
                 Operation operation = request.getOperation();
                 String operationSql = operation.getSql();
-                log.debug(operationSql);
                 switch (operation.getAction()) {
                     case EXECUTE:
                         response = executePrepared(operationSql);
@@ -103,10 +102,31 @@ public class StateObjectSql implements StateObject {
         return new Response();
     }
 
+    public Response executeReadOnly(Operation operation) {
+        try {
+            String operationSql = operation.getSql();
+            switch (operation.getAction()) {
+                case EXECUTE:
+                    return executePrepared(operationSql);
+                case QUERY:
+                    return executeQuery(operationSql);
+                default:
+                    throw new UnsupportedOperationException();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
     private void rollbackSqlOperations(Request request) {
-        long version = undoLog.get(request);
-        log.debug("Version to rollback: {}", version);
-        VERSIONABLE_TABLES.forEach(table -> rollbackVersionFromTable(version, table));
+        try {
+            long version = undoLog.get(request);
+            log.debug("Version to rollback: {}", version);
+            VERSIONABLE_TABLES.forEach(table -> rollbackVersionFromTable(version, table));
+        } catch (Exception e) {
+            e.printStackTrace();
+            log.error("err {}, req={}, ulnull={}, undolog={}", e.getMessage(), request, undoLog==null, undoLog);
+        }
     }
 
     private void rollbackVersionFromTable(long version, String table) {

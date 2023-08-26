@@ -1,7 +1,7 @@
 package pl.poznan.put.kacperwleklak.creek.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.thrift.TException;
+import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.DependsOn;
 import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
@@ -14,7 +14,6 @@ import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
-import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
@@ -22,19 +21,17 @@ import pl.poznan.put.kacperwleklak.creek.protocol.EventID;
 import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
+import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
 
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 @Slf4j
 @DependsOn({"messageUtils"})
-public class Creek implements ReliableChannelDeliverListener, CabDeliverListener, CabPredicate, OperationExecutor {
+public class Creek implements CabDeliverListener, CabPredicate, OperationExecutor {
 
     public static final int PREDICATE_ID = 1;
 
@@ -54,15 +51,13 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
     // dependencies
     private final CAB cab;
-    private final ReliableChannel reliableChannel;
+    private final ConcurrentZMQChannelSupervisor channelSupervisor;
     private final AllOpsDoneListener allOpsDoneListener;
-
-    private final double cabProbability;
 
     private final Object lock = new Object();
 
     @Autowired
-    public Creek(CAB cab, ReliableChannel reliableChannel, int replicaId, double cabProbability,
+    public Creek(CAB cab, ConcurrentZMQChannelSupervisor channelSupervisor, int replicaId,
                  PostgresServer postgresServer, AllOpsDoneListener allOpsDoneListener) {
         this.currentEventNumber = 0;
         this.casualCtx = new HashSet<>();
@@ -78,30 +73,31 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
         this.cab = cab;
         this.allOpsDoneListener = allOpsDoneListener;
-        this.reliableChannel = reliableChannel;
+        this.channelSupervisor = channelSupervisor;
         this.state = new StateObjectAdapter(postgresServer);
-        this.cabProbability = cabProbability;
-        log.info("Cab probability: {}", cabProbability);
     }
 
     @Override
     public void executeOperation(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation operation, ResponseGenerator client) {
         Operation creekOperation = AppCommonConverter.fromAppCommonOperation(operation);
-        invoke(creekOperation, isStrong(creekOperation), client);
+        invoke(creekOperation, isReadOnly(creekOperation), isStrong(creekOperation), client);
     }
 
     private boolean isStrong(Operation operation) {
-        //TODO: remove
-//        String sqlString = operation.getSql().toLowerCase(Locale.ROOT);
-//        return sqlString.matches("^.*call\\s+buy_now.*$") ||
-//                sqlString.matches("^.*insert\\s+into\\s+users.*$");
-        return ThreadLocalRandom.current().nextDouble() < cabProbability;
+        return StringUtils.startsWithIgnoreCase(operation.getSql(), "update");
+    }
+
+    private boolean isReadOnly(Operation operation) {
+        return StringUtils.startsWithIgnoreCase(operation.getSql(), "select");
     }
 
     // upon invoke(op : ops(F), strongOp : boolean), Alg I, l. 15
-    public void invoke(Operation operation, boolean isStrong, ResponseGenerator client) {
-        long start = System.currentTimeMillis();
+    public void invoke(Operation operation, boolean isReadOnly, boolean isStrong, ResponseGenerator client) {
         synchronized (lock) {
+            if (isReadOnly) {
+                handleReadOnlyOperation(operation, client);
+                return;
+            }
             currentEventNumber++;
             EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
@@ -117,13 +113,17 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
             casualCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
-            log.debug("Invoked {}", request);
             if (isStrong) {
                 cab.cabCast(request.getRequestID().toCabMessageId(), 1);
             }
         }
-        long finish = System.currentTimeMillis();
-        log.debug("Insert and Execute operation took {} ms", finish - start);
+    }
+
+    private void handleReadOnlyOperation(Operation operation, ResponseGenerator client) {
+        Response response = state.executeReadOnly(operation);
+        ResponseHandler responseHandler = new ResponseHandler(client);
+        responseHandler.setResponse(response);
+        responseToClient(responseHandler);
     }
 
     @Override
@@ -214,7 +214,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
             ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
             if (responseHandler != null && responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
-                responseToClient(request, responseHandler);
+                responseToClient(responseHandler);
                 reqsAwaitingResp.remove(strongOpsToCheckRequest);
             }
         });
@@ -237,12 +237,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     }
 
     private void broadcast(Request request) {
-        log.debug("Broadcasting event {}", request);
-        try {
-            reliableChannel.rCast(ThriftSerializer.serialize(request));
-        } catch (TException e) {
-            e.printStackTrace();
-        }
+        channelSupervisor.rCast(request);
     }
 
     private void insertIntoTentative(Request request) {
@@ -281,10 +276,10 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
     private void responseToClient(Request request, Response response) {
         ResponseHandler responseHandler = reqsAwaitingResp.get(request);
         responseHandler.setResponse(response);
-        responseToClient(request, responseHandler);
+        responseToClient(responseHandler);
     }
 
-    private void responseToClient(Request request, ResponseHandler responseHandler) {
+    private void responseToClient(ResponseHandler responseHandler) {
         responseHandler.sendResponse();
     }
 
@@ -297,6 +292,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
 
 
     public void executeSingleStep() {
+        log.debug("ESS tbRB={} tbE={}", toBeRolledBack, toBeExecuted);
         if (!toBeRolledBack.isEmpty()) {
             Request request = toBeRolledBack.get(0);
             state.rollback(request);
@@ -323,17 +319,7 @@ public class Creek implements ReliableChannelDeliverListener, CabDeliverListener
         }
     }
 
-    @Override
-    public void rDeliver(byte msgType, byte[] msg) {
-        try {
-            if (msgType == (byte) 1) {
-                Request request = new Request();
-                ThriftSerializer.deserialize(request, msg);
-                log.debug("Creek handling request {}", request);
-                operationRequestHandler(request);
-            }
-        } catch (TException e) {
-            e.printStackTrace();
-        }
+    public void rDeliver(Request request) {
+        operationRequestHandler(request);
     }
 }

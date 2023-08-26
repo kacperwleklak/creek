@@ -10,7 +10,7 @@ import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 public class AppCommonConverter {
 
     public static Request toAppCommonRequest(pl.poznan.put.kacperwleklak.creek.protocol.Request creekRequest) {
-        return new Request(toAppCommonEventId(creekRequest.getRequestID()), toAppCommonOperation(creekRequest.getOperation()));
+        return new Request(toAppCommonEventId(creekRequest.getRequestID()), toAppCommonOperation(creekRequest.getOperation()), creekRequest.getTimestamp());
     }
 
     public static Operation fromAppCommonOperation(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation operation) {

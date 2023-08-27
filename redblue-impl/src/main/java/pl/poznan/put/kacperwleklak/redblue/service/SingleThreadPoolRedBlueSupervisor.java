@@ -79,7 +79,8 @@ public class SingleThreadPoolRedBlueSupervisor implements ThriftReliableChannelC
     public void rbDeliver(TBase msg) {
         log.debug("SingleThreadPoolRedBlueSupervisor rDeliver");
         if (msg instanceof Request) {
-            executor.submit(new PriorityCallable(4, () -> redBlue.operationRequestHandler((Request) msg)));
+            Request request = (Request) msg;
+            executor.submit(new PriorityCallable(4, request.getRequestID().getCurrEventNo(), () -> redBlue.operationRequestHandler(request)));
         }
         if (msg instanceof PassToken) {
             PassToken passToken = (PassToken) msg;

@@ -62,23 +62,24 @@ public class RedBlue implements OperationExecutor {
                 currentRedNumber += 1;
             }
             causalContext.add(request.getRequestID());
-            checkPendingRequests(request);
+            checkPendingRequests(request, 0);
         } else {
             addMissingDot(request);
         }
     }
 
     //procedure checkPendingRequests(newReq : Req)
-    private void checkPendingRequests(Request newReq) {
+    private void checkPendingRequests(Request newReq, int depth) {
         List<Request> requests = pendingRequests.get(newReq.getRequestID());
         for (Request pendingRequest : requests) {
+            log.info("checkpendingrequests depth={}", depth);
             if (causalContext.containsAll(pendingRequest.getCasualCtx())) {
                 stateObject.executeShadow(pendingRequest);
                 if (pendingRequest.getRedNumber() >= 0) {
                     currentRedNumber += 1;
                 }
                 causalContext.add(pendingRequest.getRequestID());
-                checkPendingRequests(pendingRequest);
+                checkPendingRequests(pendingRequest, depth+1);
             } else {
                 addMissingDot(pendingRequest);
             }
@@ -87,6 +88,7 @@ public class RedBlue implements OperationExecutor {
 
     private void addMissingDot(Request request) {
         EventID missingDot = maxEventId(request);
+        log.info("missingDot = {}", missingDot);
         pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
         pendingRequests.get(missingDot).add(request);
     }

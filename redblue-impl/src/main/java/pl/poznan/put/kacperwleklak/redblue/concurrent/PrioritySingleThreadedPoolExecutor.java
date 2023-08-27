@@ -15,6 +15,7 @@ public class PrioritySingleThreadedPoolExecutor extends ThreadPoolExecutor {
     @Override
     protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
         RunnableFuture<T> newTaskFor = super.newTaskFor(callable);
-        return new PriorityFuture<T>(newTaskFor, ((PriorityCallable) callable).getPriority());
+        return new PriorityFuture<T>(newTaskFor, ((PriorityCallable) callable).getPriority(),
+                ((PriorityCallable) callable).getSecondPriorityPriority());
     }
 }

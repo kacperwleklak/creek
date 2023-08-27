@@ -14,7 +14,13 @@ public class PriorityFutureComparator implements Comparator<Runnable> {
             int p1 = ((PriorityFuture<?>) o1).getPriority();
             int p2 = ((PriorityFuture<?>) o2).getPriority();
 
-            return p1 > p2 ? 1 : (p1 == p2 ? 0 : -1);
+            return p1 > p2 ? 1 : (p1 == p2 ? compareSecondPriority(o1, o2) : -1);
         }
+    }
+
+    private int compareSecondPriority(Runnable o1, Runnable o2) {
+        long p1 = ((PriorityFuture<?>) o1).getSecondPriority();
+        long p2 = ((PriorityFuture<?>) o2).getSecondPriority();
+        return Long.compare(p1, p2);
     }
 }

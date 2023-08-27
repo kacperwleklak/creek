@@ -9,14 +9,19 @@ public class PriorityFuture<T> implements RunnableFuture<T> {
 
     private RunnableFuture<T> src;
     private int priority;
+    private long secondPriority;
 
-    public PriorityFuture(RunnableFuture<T> other, int priority) {
+    public PriorityFuture(RunnableFuture<T> other, int priority, long secondPriority) {
         this.src = other;
         this.priority = priority;
+        this.secondPriority = secondPriority;
     }
 
     public int getPriority() {
         return priority;
+    }
+    public long getSecondPriority() {
+        return secondPriority;
     }
 
     public boolean cancel(boolean mayInterruptIfRunning) {

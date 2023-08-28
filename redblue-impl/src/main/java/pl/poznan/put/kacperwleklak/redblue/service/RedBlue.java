@@ -21,6 +21,9 @@ import pl.poznan.put.kacperwleklak.redblue.utils.AppCommonConverter;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
 
 import java.util.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @DependsOn({"messageUtils"})
@@ -47,6 +50,8 @@ public class RedBlue implements OperationExecutor {
         this.concurrentZMQChannelSupervisor = concurrentZMQChannelSupervisor;
         this.redBlueNotificationReceiver = redBlueNotificationReceiver;
         this.stateObject = new RedBlueStateObjectAdapter(postgresServer);
+        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
+        executor.scheduleAtFixedRate(this::printDiagnostics, 20, 10, TimeUnit.SECONDS);
     }
 
     //upon RB-deliver(r : Req)
@@ -68,11 +73,20 @@ public class RedBlue implements OperationExecutor {
         }
     }
 
+    private void printDiagnostics() {
+        log.info("pendingOwnRedOps={}", pendingOwnRedOps.size());
+    }
+
     //procedure checkPendingRequests(newReq : Req)
     private void checkPendingRequests(Request newReq, int depth) {
         List<Request> requests = pendingRequests.get(newReq.getRequestID());
-        for (Request pendingRequest : requests) {
-            log.info("checkpendingrequests depth={}", depth);
+        if (requests == null || requests.isEmpty()) {
+            return;
+        }
+        Iterator<Request> pendingRequestsIterator = pendingRequests.get(newReq.getRequestID()).iterator();
+        while (pendingRequestsIterator.hasNext()) {
+            Request pendingRequest = pendingRequestsIterator.next();
+            pendingRequestsIterator.remove();
             if (causalContext.containsAll(pendingRequest.getCasualCtx())) {
                 stateObject.executeShadow(pendingRequest);
                 if (pendingRequest.getRedNumber() >= 0) {
@@ -88,7 +102,6 @@ public class RedBlue implements OperationExecutor {
 
     private void addMissingDot(Request request) {
         EventID missingDot = maxEventId(request);
-        log.info("missingDot = {}", missingDot);
         pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
         pendingRequests.get(missingDot).add(request);
     }

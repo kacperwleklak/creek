@@ -5,7 +5,6 @@ import org.apache.thrift.TBase;
 import org.apache.thrift.TException;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.stereotype.Service;
 import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
@@ -24,13 +23,12 @@ public class ConcurrentZMQChannelSupervisor implements ReliableChannelDeliverLis
     private final ReliableChannel reliableChannel;
     private final List<ThriftReliableChannelClient> clients;
 
-
     @Autowired
     public ConcurrentZMQChannelSupervisor(ReliableChannel reliableChannel,
                                           @Value("${communication.replicas.nodes}") List<String> replicasAddresses) {
         this.reliableChannel = reliableChannel;
         this.clients = new CopyOnWriteArrayList<>();
-        this.executor = new ExceptionHandlingThreadPoolExecutor(2 * replicasAddresses.size());
+        this.executor = new ExceptionHandlingThreadPoolExecutor(replicasAddresses.size() * replicasAddresses.size());
     }
 
     @PostConstruct
@@ -66,7 +64,7 @@ public class ConcurrentZMQChannelSupervisor implements ReliableChannelDeliverLis
             ThriftReliableChannelClient client = clients.stream()
                     .filter(c -> c.canHandle(resolvedMsgType))
                     .findAny()
-                    .orElseThrow();
+                    .orElseThrow(() -> new RuntimeException("Unable to find anyone for msg type = " + resolvedMsgType));
             TBase resolved = client.resolve(resolvedMsgType);
             ThriftSerializer.deserialize(resolved, msg);
             client.rbDeliver(resolved);

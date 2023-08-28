@@ -41,8 +41,8 @@ public class RedBlueStateObjectAdapter extends NonVersionedStateObjectSql {
                     .findFirst()
                     .map(this::responseToString)
                     .map(this::extractOperation)
-                    .orElseThrow(() -> new IllegalStateException("Received unexpected generator operation result"));
-            return new GeneratorOpResult(response, new Operation(generatedOperation, Action.QUERY));
+                    .orElse(null);
+            return new GeneratorOpResult(response, generatedOperation == null ? null : new Operation(generatedOperation, Action.QUERY));
         } else {
             return new GeneratorOpResult(null, request.getShadowOp());
         }

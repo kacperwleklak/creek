@@ -11,7 +11,7 @@ public class ExceptionHandlingThreadPoolExecutor extends ThreadPoolExecutor {
 
     public ExceptionHandlingThreadPoolExecutor(int corePoolSize) {
         super(corePoolSize,
-                10 * corePoolSize,
+                Integer.MAX_VALUE,
                 10,
                 TimeUnit.SECONDS,
                 new ArrayBlockingQueue<Runnable>(2), new RejectedExecutionHandlerImpl());

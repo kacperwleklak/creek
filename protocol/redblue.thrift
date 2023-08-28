@@ -20,6 +20,11 @@ enum Action {
     EXECUTE = 2
 }
 
+struct DottedVersionVector {
+    1: list<i64> vc;
+    2: list<set<i64>> dots;
+}
+
 struct Operation {
   1: string sql,
   2: Action action

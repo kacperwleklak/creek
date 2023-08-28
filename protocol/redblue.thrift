@@ -8,11 +8,11 @@ struct PassToken {
 
 struct Request {
     1: i8 msgType = 2,
-    2: EventID requestID,
+    2: Dot requestID,
     3: i64 redNumber,
     4: Operation shadowOp,
     5: bool strongOp,
-    6: set<EventID> casualCtx
+    6: DottedVersionVector causalCtx
 }
 
 enum Action {
@@ -20,17 +20,17 @@ enum Action {
     EXECUTE = 2
 }
 
-struct DottedVersionVector {
-    1: list<i64> vc;
-    2: list<set<i64>> dots;
-}
-
 struct Operation {
   1: string sql,
   2: Action action
 }
 
-struct EventID {
+struct DottedVersionVector {
+    1: list<i64> vc;
+    2: list<set<i64>> dots;
+}
+
+struct Dot {
     1: i8 replica;
     2: i64 currEventNo;
 }

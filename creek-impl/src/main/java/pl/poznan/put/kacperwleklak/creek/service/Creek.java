@@ -17,7 +17,8 @@ import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
-import pl.poznan.put.kacperwleklak.creek.protocol.EventID;
+import pl.poznan.put.kacperwleklak.creek.protocol.Dot;
+import pl.poznan.put.kacperwleklak.creek.protocol.DottedVersionVector;
 import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
@@ -38,7 +39,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     // current state variables
     private int currentEventNumber;
     private final int replicaId;
-    private final Set<EventID> casualCtx;
+    private final DottedVersionVector causalCtx;
     private ArrayList<Request> tentative;
     private ArrayList<Request> committed;
     private List<Request> executed;
@@ -47,7 +48,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     private final Map<Request, ResponseHandler> reqsAwaitingResp;
     private final Set<Request> missingContextOps;
     private final StateObjectAdapter state;
-    private final ConcurrentHashMap<EventID, CabPredicateCallback> callbackMap;
+    private final ConcurrentHashMap<Dot, CabPredicateCallback> callbackMap;
 
     // dependencies
     private final CAB cab;
@@ -57,10 +58,10 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     private final Object lock = new Object();
 
     @Autowired
-    public Creek(CAB cab, ConcurrentZMQChannelSupervisor channelSupervisor, int replicaId,
+    public Creek(CAB cab, ConcurrentZMQChannelSupervisor channelSupervisor, int replicaId, int noOfReplicas,
                  PostgresServer postgresServer, AllOpsDoneListener allOpsDoneListener) {
         this.currentEventNumber = 0;
-        this.casualCtx = new HashSet<>();
+        this.causalCtx = new DottedVersionVector(noOfReplicas);
         this.tentative = new ArrayList<>();
         this.committed = new ArrayList<>();
         this.executed = new ArrayList<>();
@@ -99,18 +100,18 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
                 return;
             }
             currentEventNumber++;
-            EventID eventID = new EventID(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
+            Dot eventID = new Dot(Integer.valueOf(replicaId).byteValue(), currentEventNumber);
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
             if (isStrong) {
-                List<EventID> tentativeGreaterThanCurrentRequest = tentative
-                        .stream()
+                DottedVersionVector reqCausalCtx = new DottedVersionVector(causalCtx);
+                tentative.stream()
                         .filter(request1 -> request1.compareTo(request) > 0)
                         .map(Request::getRequestID)
-                        .collect(Collectors.toList());
-                request.setCasualCtx(CollectionUtils.differenceToSet(casualCtx, tentativeGreaterThanCurrentRequest));
+                        .forEach(dot -> reqCausalCtx.remove(dot));
+                request.setCausalCtx(reqCausalCtx);
             }
             reqsAwaitingResp.put(request, new ResponseHandler(client));
-            casualCtx.add(eventID);
+            causalCtx.add(eventID);
             insertIntoTentative(request);
             broadcast(request);
             if (isStrong) {
@@ -128,12 +129,12 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
 
     @Override
     public boolean testSync(CabMessageID messageID) {
-        return checkDep(EventID.fromCabMessageId(messageID));
+        return checkDep(Dot.fromCabMessageId(messageID));
     }
 
     @Override
     public boolean testAsync(CabMessageID messageID, CabPredicateCallback predicateCallback) {
-        EventID eventID = EventID.fromCabMessageId(messageID);
+        Dot eventID = Dot.fromCabMessageId(messageID);
         boolean test = checkDep(eventID);
         if (!test) {
             log.debug("Async tested false, saving callback");
@@ -152,8 +153,8 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
             checkWaitingPredicates();
             return;
         }
-        if (!request.isStrong() || casualCtx.containsAll(request.getCasualCtx())) {
-            casualCtx.add(request.getRequestID());
+        if (!request.isStrong() || causalCtx.isSuperSetOf(request.getCausalCtx())) {
+            causalCtx.add(request.getRequestID());
             List<Request> readyToScheduleOps = new ArrayList<>(List.of(request));
             readyToScheduleOps = establishReadyToScheduleOps(readyToScheduleOps);
             insertIntoTentative(readyToScheduleOps);
@@ -164,10 +165,10 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     }
 
     private void checkWaitingPredicates() {
-        Iterator<Map.Entry<EventID, CabPredicateCallback>> iterator = callbackMap.entrySet().iterator();
+        Iterator<Map.Entry<Dot, CabPredicateCallback>> iterator = callbackMap.entrySet().iterator();
         while (iterator.hasNext()) {
-            Map.Entry<EventID, CabPredicateCallback> entry = iterator.next();
-            EventID eventID = entry.getKey();
+            Map.Entry<Dot, CabPredicateCallback> entry = iterator.next();
+            Dot eventID = entry.getKey();
             boolean test = checkDep(eventID);
             if (test) {
                 entry.getValue().predicateBecomesTrue(PREDICATE_ID, eventID.toCabMessageId());
@@ -181,8 +182,8 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         Iterator<Request> missingContextOpsIterator = missingContextOps.iterator();
         while (missingContextOpsIterator.hasNext()) {
             Request request = missingContextOpsIterator.next();
-            if (casualCtx.containsAll(request.getCasualCtx())) {
-                casualCtx.add(request.getRequestID());
+            if (causalCtx.isSuperSetOf(request.getCausalCtx())) {
+                causalCtx.add(request.getRequestID());
                 readyToScheduleOps.add(request);
                 missingContextOpsIterator.remove();
                 anythingUpdated = true;
@@ -196,7 +197,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     // procedure commit(r : Req)
     private void commit(Request request) {
         List<Request> committedExt = tentative.stream()
-                .filter(tentativeRequest -> request.getCasualCtx().contains(tentativeRequest.getRequestID()))
+                .filter(tentativeRequest -> request.getCausalCtx().contains(tentativeRequest.getRequestID()))
                 .collect(Collectors.toList());
         ArrayList<Request> newTentative = tentative.stream()
                 .filter(tentativeRequest -> !tentativeRequest.equals(request))
@@ -263,13 +264,13 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         }
     }
 
-    private boolean checkDep(EventID eventID) {
+    private boolean checkDep(Dot eventID) {
         ArrayList<Request> commitedCopy = new ArrayList<>(this.committed);
         ArrayList<Request> tentativeCopy = new ArrayList<>(this.tentative);
         return Stream.concat(commitedCopy.stream(), tentativeCopy.stream())
                 .filter(request -> eventID.equals(request.getRequestID()))
                 .findAny()
-                .map(request -> casualCtx.containsAll(request.getCasualCtx()))
+                .map(request -> causalCtx.contains(request.getCausalCtx().maxDot()))
                 .orElse(false);
     }
 

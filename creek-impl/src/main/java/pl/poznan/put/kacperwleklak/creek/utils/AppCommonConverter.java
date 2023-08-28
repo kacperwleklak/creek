@@ -21,8 +21,8 @@ public class AppCommonConverter {
         return new pl.poznan.put.kacperwleklak.appcommon.db.request.Operation(operation.getSql(), resolveOperationType(operation.getAction()));
     }
 
-    public static EventID toAppCommonEventId(pl.poznan.put.kacperwleklak.creek.protocol.EventID eventID) {
-        return new EventID(eventID.getReplica(), eventID.getOperationId());
+    public static EventID toAppCommonEventId(pl.poznan.put.kacperwleklak.creek.protocol.Dot dot) {
+        return new EventID(dot.getReplica(), dot.getCurrEventNo());
     }
 
     private static Action resolveOperationType(pl.poznan.put.kacperwleklak.appcommon.db.request.Operation.Type type) {

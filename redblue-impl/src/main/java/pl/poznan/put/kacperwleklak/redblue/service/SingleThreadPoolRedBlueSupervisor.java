@@ -2,7 +2,6 @@ package pl.poznan.put.kacperwleklak.redblue.service;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.thrift.TBase;
-import org.apache.thrift.TException;
 import org.h2.tools.Server;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -14,15 +13,12 @@ import pl.poznan.put.kacperwleklak.appcommon.db.OperationExecutor;
 import pl.poznan.put.kacperwleklak.appcommon.db.PostgresServer;
 import pl.poznan.put.kacperwleklak.appcommon.db.ResponseGenerator;
 import pl.poznan.put.kacperwleklak.appcommon.db.request.Operation;
-import pl.poznan.put.kacperwleklak.common.thrift.ThriftSerializer;
 import pl.poznan.put.kacperwleklak.redblue.concurrent.PriorityCallable;
 import pl.poznan.put.kacperwleklak.redblue.concurrent.PrioritySingleThreadedPoolExecutor;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.RedBlueNotificationReceiver;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.TokenNotificationReceiver;
 import pl.poznan.put.kacperwleklak.redblue.protocol.PassToken;
 import pl.poznan.put.kacperwleklak.redblue.protocol.Request;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
-import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ThriftReliableChannelClient;
 

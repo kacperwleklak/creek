@@ -12,10 +12,7 @@ import pl.poznan.put.kacperwleklak.appcommon.db.response.ResponseHandler;
 import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
 import pl.poznan.put.kacperwleklak.redblue.interfaces.RedBlueNotificationReceiver;
 import pl.poznan.put.kacperwleklak.redblue.model.OwnRequest;
-import pl.poznan.put.kacperwleklak.redblue.protocol.EventID;
-import pl.poznan.put.kacperwleklak.redblue.protocol.Operation;
-import pl.poznan.put.kacperwleklak.redblue.protocol.PassToken;
-import pl.poznan.put.kacperwleklak.redblue.protocol.Request;
+import pl.poznan.put.kacperwleklak.redblue.protocol.*;
 import pl.poznan.put.kacperwleklak.redblue.state.GeneratorOpResult;
 import pl.poznan.put.kacperwleklak.redblue.utils.AppCommonConverter;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
@@ -37,16 +34,17 @@ public class RedBlue implements OperationExecutor {
     private long currEventNumber = 0;
     private long currentRedNumber = 0;
     private long tokenRedNumber = -1;
-    private final Set<EventID> causalContext = new HashSet<>();
+    private final DottedVersionVector causalContext;
     private final Queue<OwnRequest> pendingOwnRedOps = new ArrayDeque<>();
     private final RedBlueStateObjectAdapter stateObject;
-    private final Map<EventID, List<Request>> pendingRequests = new HashMap<>();
+    private final Map<Dot, List<Request>> pendingRequests = new HashMap<>();
 
     public RedBlue(ConcurrentZMQChannelSupervisor concurrentZMQChannelSupervisor, int replicaId, PostgresServer postgresServer, List<String> replicas,
                    RedBlueNotificationReceiver redBlueNotificationReceiver) {
         REPLICA_ID = (byte) replicaId;
         if (REPLICA_ID == 1) tokenRedNumber = 0;
         this.replicas = replicas;
+        this.causalContext = new DottedVersionVector(replicas.size());
         this.concurrentZMQChannelSupervisor = concurrentZMQChannelSupervisor;
         this.redBlueNotificationReceiver = redBlueNotificationReceiver;
         this.stateObject = new RedBlueStateObjectAdapter(postgresServer);
@@ -61,7 +59,7 @@ public class RedBlue implements OperationExecutor {
             return;
         }
         long reqRedNumber = request.getRedNumber();
-        if (causalContext.containsAll(request.getCasualCtx())) {
+        if (causalContext.isSuperSetOf(request.getCausalCtx())) {
             stateObject.executeShadow(request);
             if (reqRedNumber > 0) {
                 currentRedNumber += 1;
@@ -87,7 +85,7 @@ public class RedBlue implements OperationExecutor {
         while (pendingRequestsIterator.hasNext()) {
             Request pendingRequest = pendingRequestsIterator.next();
             pendingRequestsIterator.remove();
-            if (causalContext.containsAll(pendingRequest.getCasualCtx())) {
+            if (causalContext.isSuperSetOf(pendingRequest.getCausalCtx())) {
                 stateObject.executeShadow(pendingRequest);
                 if (pendingRequest.getRedNumber() >= 0) {
                     currentRedNumber += 1;
@@ -101,13 +99,13 @@ public class RedBlue implements OperationExecutor {
     }
 
     private void addMissingDot(Request request) {
-        EventID missingDot = maxEventId(request);
+        Dot missingDot = maxEventId(request);
         pendingRequests.putIfAbsent(missingDot, new ArrayList<>());
         pendingRequests.get(missingDot).add(request);
     }
 
     public void tokenTimeIsUp() {
-        byte nextReplica = (byte) ((REPLICA_ID % replicas.size()) + 1);
+        byte nextReplica = (byte) ((REPLICA_ID+1) % replicas.size());
         log.debug("Sending token={} to replica {}", currentRedNumber, (int) nextReplica);
         PassToken passTokenMsg = new PassToken(currentRedNumber, nextReplica);
         rbCast(passTokenMsg);
@@ -166,8 +164,8 @@ public class RedBlue implements OperationExecutor {
                 redNumber = currentRedNumber += 1;
             }
             currEventNumber += 1;
-            EventID eventID = new EventID(REPLICA_ID, currEventNumber);
-            Request request = new Request(eventID, redNumber, shadowOperation, strongOp, new HashSet<>(causalContext));
+            Dot eventID = new Dot(REPLICA_ID, currEventNumber);
+            Request request = new Request(eventID, redNumber, shadowOperation, strongOp, new DottedVersionVector(causalContext));
             rbCast(request);
             Response shadowResponse = stateObject.executeShadow(request);
             if (Objects.isNull(response)) response = shadowResponse;
@@ -188,12 +186,7 @@ public class RedBlue implements OperationExecutor {
         return condition;
     }
 
-    private EventID maxEventId(Request request) {
-        Set<EventID> eventIds = CollectionUtils.differenceToSet(request.getCasualCtx(), causalContext);
-        return eventIds.stream()
-                .max(Comparator
-                        .comparing(EventID::getReplica)
-                        .thenComparing(EventID::getCurrEventNo))
-                .orElseThrow(() -> new RuntimeException("Unable to find max EventID"));
+    private Dot maxEventId(Request request) {
+        return request.getCausalCtx().maxDot(causalContext);
     }
 }

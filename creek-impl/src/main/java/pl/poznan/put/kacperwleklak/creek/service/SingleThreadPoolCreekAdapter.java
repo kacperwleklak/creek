@@ -29,6 +29,7 @@ import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ThriftReliableChannelC
 
 import javax.annotation.PostConstruct;
 import java.sql.SQLException;
+import java.util.List;
 import java.util.Map;
 
 import static pl.poznan.put.kacperwleklak.creek.service.Creek.PREDICATE_ID;
@@ -50,12 +51,13 @@ public class SingleThreadPoolCreekAdapter implements ThriftReliableChannelClient
     public SingleThreadPoolCreekAdapter(CAB cab,
                                         ConcurrentZMQChannelSupervisor channelSupervisor,
                                         @Value("${postgres.port}") String pgPort,
+                                        @Value("${communication.replicas.nodes}") List<String> replicasAddresses,
                                         @Value("${communication.replicas.id}") int replicaId) throws SQLException {
         this.cab = cab;
         this.channelSupervisor = channelSupervisor;
         PostgresServer postgresServer = new PostgresServer(this);
         this.pgServer = new Server(postgresServer, "-baseDir", "./", "-pgAllowOthers", "-ifNotExists", "-pgPort", pgPort);
-        this.creek = new Creek(cab, channelSupervisor, replicaId, postgresServer, this);
+        this.creek = new Creek(cab, channelSupervisor, replicaId, replicasAddresses.size(), postgresServer, this);
         singleThreadExecutor = new RepeatableIdleTaskExecutor(creek::executeSingleStep);
         singleThreadExecutor.setCorePoolSize(1);
         singleThreadExecutor.setThreadNamePrefix("Creek-");

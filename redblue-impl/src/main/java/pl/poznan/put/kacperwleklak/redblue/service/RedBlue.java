@@ -65,7 +65,7 @@ public class RedBlue implements OperationExecutor {
                 currentRedNumber += 1;
             }
             causalContext.add(request.getRequestID());
-            checkPendingRequests(request, 0);
+            checkPendingRequests(request);
         } else {
             addMissingDot(request);
         }
@@ -76,22 +76,19 @@ public class RedBlue implements OperationExecutor {
     }
 
     //procedure checkPendingRequests(newReq : Req)
-    private void checkPendingRequests(Request newReq, int depth) {
-        List<Request> requests = pendingRequests.get(newReq.getRequestID());
-        if (requests == null || requests.isEmpty()) {
+    private void checkPendingRequests(Request newReq) {
+        List<Request> requests = pendingRequests.remove(newReq.getRequestID());
+        if (requests == null) {
             return;
         }
-        Iterator<Request> pendingRequestsIterator = pendingRequests.get(newReq.getRequestID()).iterator();
-        while (pendingRequestsIterator.hasNext()) {
-            Request pendingRequest = pendingRequestsIterator.next();
-            pendingRequestsIterator.remove();
+        for (Request pendingRequest : requests) {
             if (causalContext.isSuperSetOf(pendingRequest.getCausalCtx())) {
                 stateObject.executeShadow(pendingRequest);
                 if (pendingRequest.getRedNumber() >= 0) {
                     currentRedNumber += 1;
                 }
                 causalContext.add(pendingRequest.getRequestID());
-                checkPendingRequests(pendingRequest, depth+1);
+                checkPendingRequests(pendingRequest);
             } else {
                 addMissingDot(pendingRequest);
             }

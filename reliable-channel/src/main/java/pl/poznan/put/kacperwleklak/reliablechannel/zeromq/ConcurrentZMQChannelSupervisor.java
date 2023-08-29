@@ -11,6 +11,7 @@ import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannel;
 import pl.poznan.put.kacperwleklak.reliablechannel.ReliableChannelDeliverListener;
 
 import javax.annotation.PostConstruct;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -46,7 +47,7 @@ public class ConcurrentZMQChannelSupervisor implements ReliableChannelDeliverLis
 
     @Override
     public void rDeliver(byte msgType, byte[] msg) {
-        executor.execute(() -> deserializeAndDeliver(msgType, msg));
+        executor.execute(() -> deserializeAndDeliver(msgType, Arrays.copyOf(msg, msg.length)));
     }
 
     private void serializeAndCast(TBase msg) {

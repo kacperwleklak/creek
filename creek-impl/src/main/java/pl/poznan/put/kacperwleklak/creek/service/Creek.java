@@ -23,12 +23,11 @@ import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
 import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
+import zmq.socket.reqrep.Req;
 
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 @Slf4j
 @DependsOn({"messageUtils"})
@@ -43,12 +42,13 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     private ArrayList<Request> tentative;
     private ArrayList<Request> committed;
     private List<Request> executed;
-    private List<Request> toBeExecuted;
     private List<Request> toBeRolledBack;
     private final Map<Request, ResponseHandler> reqsAwaitingResp;
     private final Set<Request> missingContextOps;
     private final StateObjectAdapter state;
     private final ConcurrentHashMap<Dot, CabPredicateCallback> callbackMap;
+    private final Map<Dot, Request> allRequests;
+    private final Map<CabMessageID, Request> strongOpsInTentative;
 
     // dependencies
     private final CAB cab;
@@ -65,12 +65,13 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         this.tentative = new ArrayList<>();
         this.committed = new ArrayList<>();
         this.executed = new ArrayList<>();
-        this.toBeExecuted = new LinkedList<>();
         this.toBeRolledBack = new LinkedList<>();
         this.reqsAwaitingResp = new HashMap<>();
         this.missingContextOps = new HashSet<>();
         this.callbackMap = new ConcurrentHashMap<>();
         this.replicaId = replicaId;
+        this.allRequests = new HashMap<>();
+        this.strongOpsInTentative = new HashMap<>();
 
         this.cab = cab;
         this.allOpsDoneListener = allOpsDoneListener;
@@ -104,10 +105,12 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
             if (isStrong) {
                 DottedVersionVector reqCausalCtx = new DottedVersionVector(causalCtx);
-                tentative.stream()
-                        .filter(request1 -> request1.compareTo(request) > 0)
-                        .map(Request::getRequestID)
-                        .forEach(dot -> reqCausalCtx.remove(dot));
+                for (ListIterator<Request> iterator = tentative.listIterator(tentative.size()); iterator.hasPrevious();) {
+                    Request x = iterator.previous();
+                    if (x.compareTo(request) < 0)
+                        break;
+                    reqCausalCtx.remove(x.getRequestID());
+                }
                 request.setCausalCtx(reqCausalCtx);
             }
             reqsAwaitingResp.put(request, new ResponseHandler(client));
@@ -194,42 +197,77 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
                 : readyToScheduleOps;
     }
 
-    // procedure commit(r : Req)
     private void commit(Request request) {
-        List<Request> committedExt = tentative.stream()
-                .filter(tentativeRequest -> request.getCausalCtx().contains(tentativeRequest.getRequestID()))
-                .collect(Collectors.toList());
-        ArrayList<Request> newTentative = tentative.stream()
-                .filter(tentativeRequest -> !tentativeRequest.equals(request))
-                .filter(tentativeRequest -> !committedExt.contains(tentativeRequest))
-                .collect(Collectors.toCollection(ArrayList::new));
-        committed.addAll(committedExt);
+        int newCommits = 0;
+        int firstNotCommitted = 0;
+        for (int i = 0; i < tentative.size(); i++) {
+            Request x = tentative.get(i);
+            if (request.getCausalCtx().contains(x.getRequestID()) || x == request) {
+                if (firstNotCommitted == i)
+                    firstNotCommitted++;
+                newCommits++;
+                if (x != request)
+                    committed.add(x);
+                if (x.isStrong())
+                    strongOpsInTentative.remove(x.getRequestID().toCabMessageId());
+            }
+            else {
+                if (newCommits > 0)
+                    tentative.set(i - newCommits, x);
+            }
+        }
+        for (int i = 0; i < newCommits; i++)
+            tentative.remove(tentative.size() - 1);
         committed.add(request);
-        tentative = newTentative;
-        List<Request> newOrder = CollectionUtils.concatLists(committed, tentative);
-        adjustExecution(newOrder);
-        List<Request> strongOpsToCheck = committedExt.stream()
-                .filter(Request::isStrong)
-                .collect(Collectors.toList());
-        strongOpsToCheck.add(request);
-        strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
+        if (firstNotCommitted < newCommits)
+            adjustExecution(firstNotCommitted - newCommits); // negative value means that the firstChangedInTentative is already on the committed list
+        for (int i = committed.size() - newCommits; i < committed.size(); i++) {
+            Request strongOpsToCheckRequest = committed.get(i);
             ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
-            if (responseHandler != null && responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
+            if (responseHandler != null && responseHandler.hasResponse() && executed.size() > i) {
                 responseToClient(responseHandler);
                 reqsAwaitingResp.remove(strongOpsToCheckRequest);
             }
-        });
+        }
     }
+
+    // procedure commit(r : Req)
+//    private void commit(Request request) {
+//        strongOpsInTentative.remove(request.getRequestID().toCabMessageId());
+//        List<Request> committedExt = tentative.stream()
+//                .filter(tentativeRequest -> request.getCausalCtx().contains(tentativeRequest.getRequestID()))
+//                .peek(tentativeRequest -> {strongOpsInTentative.remove(tentativeRequest.getRequestID().toCabMessageId());})
+//                .collect(Collectors.toList());
+//        ArrayList<Request> newTentative = tentative.stream()
+//                .filter(tentativeRequest -> !tentativeRequest.equals(request))
+//                .filter(tentativeRequest -> !committedExt.contains(tentativeRequest))
+//                .collect(Collectors.toCollection(ArrayList::new));
+//        committed.addAll(committedExt);
+//        committed.add(request);
+//        tentative = newTentative;
+//        List<Request> newOrder = CollectionUtils.concatLists(committed, tentative);
+//        adjustExecution(newOrder);
+//        List<Request> strongOpsToCheck = committedExt.stream()
+//                .filter(Request::isStrong)
+//                .collect(Collectors.toList());
+//        strongOpsToCheck.add(request);
+//        strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
+//            ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
+//            if (responseHandler != null && responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
+//                responseToClient(responseHandler);
+//                reqsAwaitingResp.remove(strongOpsToCheckRequest);
+//            }
+//        });
+//    }
 
     //upon CAB-deliver(id : pair〈int, int〉)
     @Override
     public void cabDelver(CabMessageID cabMessageID) {
         synchronized (lock) {
             log.debug("CAB Delivered: {}", cabMessageID);
-            tentative.stream()
-                    .filter(request -> request.getRequestID().toCabMessageId().equals(cabMessageID))
-                    .findAny()
-                    .ifPresent(this::commit);
+            Request request = strongOpsInTentative.get(cabMessageID);
+            if (request != null)
+                commit(request);
         }
     }
 
@@ -246,32 +284,40 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     }
 
     private void insertIntoTentative(List<Request> readyToScheduleOps) {
-        tentative.addAll(readyToScheduleOps);
-        tentative.sort(Request::compareTo);
-        List<Request> newOrder = CollectionUtils.concatLists(committed, tentative);
-        adjustExecution(newOrder);
+        int minInsPoint = tentative.size();
+        for (Request r : readyToScheduleOps) {
+            allRequests.put(r.getRequestID(), r);
+            if (r.isStrong()) {
+                strongOpsInTentative.put(r.getRequestID().toCabMessageId(), r);
+            }
+            // res = (-(insertion point) - 1)
+            // res + 1 = -(insertion point)
+            // insertion point = -(res + 1)
+            int res = Collections.binarySearch(tentative, r, Request::compareTo);
+            assert res < 0;
+            int insertionPoint = -(res + 1);
+            if (insertionPoint < minInsPoint)
+                minInsPoint = insertionPoint;
+            tentative.add(insertionPoint, r);
+        }
+        adjustExecution(minInsPoint);
     }
 
-    private void adjustExecution(List<Request> newOrder) {
+    private void adjustExecution(int firstChangedInTentative) {
         synchronized (lock) {
-            CommonPrefixResult<Request> commonPrefixResult = CollectionUtils.longestCommonPrefix(executed, newOrder);
-            List<Request> inOrder = commonPrefixResult.getCommonPrefix();
-            List<Request> outOfOrder = commonPrefixResult.getFirstListTail();
-            executed = inOrder;
-            toBeExecuted = CollectionUtils.differenceToList(commonPrefixResult.getSecondListTail(), commonPrefixResult.getFirstListTail());
-            Collections.reverse(outOfOrder);
-            toBeRolledBack = CollectionUtils.concatLists(toBeRolledBack, outOfOrder);
+            int commonLength = Math.min(executed.size(), committed.size() + firstChangedInTentative);
+
+            for (int i = executed.size() - 1; i >= commonLength; i--) {
+                toBeRolledBack.add(executed.remove(i));
+            }
         }
     }
 
     private boolean checkDep(Dot eventID) {
-        ArrayList<Request> commitedCopy = new ArrayList<>(this.committed);
-        ArrayList<Request> tentativeCopy = new ArrayList<>(this.tentative);
-        return Stream.concat(commitedCopy.stream(), tentativeCopy.stream())
-                .filter(request -> eventID.equals(request.getRequestID()))
-                .findAny()
-                .map(request -> causalCtx.contains(request.getCausalCtx().maxDot()))
-                .orElse(false);
+        Request request = allRequests.get(eventID);
+        if (request == null)
+            return false;
+        return causalCtx.isSuperSetOf(request.getCausalCtx());
     }
 
     private void responseToClient(Request request, Response response) {
@@ -293,13 +339,13 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
 
 
     public void executeSingleStep() {
-        log.debug("ESS tbRB={} tbE={}", toBeRolledBack, toBeExecuted);
+        log.debug("ESS tbRB={} tbE={}", toBeRolledBack);
         if (!toBeRolledBack.isEmpty()) {
             Request request = toBeRolledBack.get(0);
             state.rollback(request);
             toBeRolledBack.remove(0);
-        } else if (!toBeExecuted.isEmpty()) {
-            Request request = toBeExecuted.get(0);
+        } else if (executed.size() < committed.size() + tentative.size()) {
+            Request request = executed.size() < committed.size() ? committed.get(executed.size()) : tentative.get(executed.size() - committed.size());
             Response response = state.execute(request);
             if (reqsAwaitingResp.containsKey(request)) {
                 if (!request.isStrong()) {
@@ -314,7 +360,6 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
                 }
             }
             executed.add(request);
-            toBeExecuted.remove(0);
         } else {
             allOpsDoneListener.notifyNothingToDo();
         }

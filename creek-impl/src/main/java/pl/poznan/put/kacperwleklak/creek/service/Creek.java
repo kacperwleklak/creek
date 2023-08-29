@@ -14,16 +14,14 @@ import pl.poznan.put.kacperwleklak.cab.CabDeliverListener;
 import pl.poznan.put.kacperwleklak.cab.CabPredicate;
 import pl.poznan.put.kacperwleklak.cab.CabPredicateCallback;
 import pl.poznan.put.kacperwleklak.cab.protocol.CabMessageID;
-import pl.poznan.put.kacperwleklak.common.utils.CollectionUtils;
-import pl.poznan.put.kacperwleklak.common.utils.CommonPrefixResult;
 import pl.poznan.put.kacperwleklak.creek.interfaces.AllOpsDoneListener;
 import pl.poznan.put.kacperwleklak.creek.protocol.Dot;
 import pl.poznan.put.kacperwleklak.creek.protocol.DottedVersionVector;
 import pl.poznan.put.kacperwleklak.creek.protocol.Operation;
 import pl.poznan.put.kacperwleklak.creek.protocol.Request;
+import pl.poznan.put.kacperwleklak.creek.structure.ArrayDequeList;
 import pl.poznan.put.kacperwleklak.creek.utils.AppCommonConverter;
 import pl.poznan.put.kacperwleklak.reliablechannel.zeromq.ConcurrentZMQChannelSupervisor;
-import zmq.socket.reqrep.Req;
 
 import java.time.Instant;
 import java.util.*;
@@ -41,10 +39,10 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     private final DottedVersionVector causalCtx;
     private ArrayList<Request> tentative;
     private ArrayList<Request> committed;
-    private List<Request> executed;
-    private List<Request> toBeRolledBack;
+    private ArrayList<Request> executed;
+    private ArrayDequeList<Request> toBeRolledBack;
     private final Map<Request, ResponseHandler> reqsAwaitingResp;
-    private final Set<Request> missingContextOps;
+    private final Map<Dot, List<Request>> missingContextOps;
     private final StateObjectAdapter state;
     private final ConcurrentHashMap<Dot, CabPredicateCallback> callbackMap;
     private final Map<Dot, Request> allRequests;
@@ -65,9 +63,9 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         this.tentative = new ArrayList<>();
         this.committed = new ArrayList<>();
         this.executed = new ArrayList<>();
-        this.toBeRolledBack = new LinkedList<>();
+        this.toBeRolledBack = new ArrayDequeList<>();
         this.reqsAwaitingResp = new HashMap<>();
-        this.missingContextOps = new HashSet<>();
+        this.missingContextOps = new HashMap<>();
         this.callbackMap = new ConcurrentHashMap<>();
         this.replicaId = replicaId;
         this.allRequests = new HashMap<>();
@@ -105,7 +103,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
             Request request = new Request(getCurrentTime(), eventID, operation, isStrong);
             if (isStrong) {
                 DottedVersionVector reqCausalCtx = new DottedVersionVector(causalCtx);
-                for (ListIterator<Request> iterator = tentative.listIterator(tentative.size()); iterator.hasPrevious();) {
+                for (ListIterator<Request> iterator = tentative.listIterator(tentative.size()); iterator.hasPrevious(); ) {
                     Request x = iterator.previous();
                     if (x.compareTo(request) < 0)
                         break;
@@ -159,12 +157,18 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         if (!request.isStrong() || causalCtx.isSuperSetOf(request.getCausalCtx())) {
             causalCtx.add(request.getRequestID());
             List<Request> readyToScheduleOps = new ArrayList<>(List.of(request));
-            readyToScheduleOps = establishReadyToScheduleOps(readyToScheduleOps);
+            establishReadyToScheduleOps(request, readyToScheduleOps);
             insertIntoTentative(readyToScheduleOps);
         } else {
-            missingContextOps.add(request);
+            addMissingDot(request);
         }
         checkWaitingPredicates();
+    }
+
+    private void addMissingDot(Request request) {
+        Dot missingDot = request.getCausalCtx().maxDot(causalCtx);
+        missingContextOps.putIfAbsent(missingDot, new ArrayList<>());
+        missingContextOps.get(missingDot).add(request);
     }
 
     private void checkWaitingPredicates() {
@@ -180,21 +184,20 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         }
     }
 
-    private List<Request> establishReadyToScheduleOps(List<Request> readyToScheduleOps) {
-        boolean anythingUpdated = false;
-        Iterator<Request> missingContextOpsIterator = missingContextOps.iterator();
-        while (missingContextOpsIterator.hasNext()) {
-            Request request = missingContextOpsIterator.next();
+    private void establishReadyToScheduleOps(Request newReq, List<Request> readyToScheduleOps) {
+        List<Request> requests = missingContextOps.remove(newReq.getRequestID());
+        if (requests == null) {
+            return;
+        }
+        for (Request request : requests) {
             if (causalCtx.isSuperSetOf(request.getCausalCtx())) {
                 causalCtx.add(request.getRequestID());
                 readyToScheduleOps.add(request);
-                missingContextOpsIterator.remove();
-                anythingUpdated = true;
+                establishReadyToScheduleOps(request, readyToScheduleOps);
+            } else {
+                addMissingDot(request);
             }
         }
-        return anythingUpdated
-                ? establishReadyToScheduleOps(readyToScheduleOps)
-                : readyToScheduleOps;
     }
 
     private void commit(Request request) {
@@ -210,8 +213,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
                     committed.add(x);
                 if (x.isStrong())
                     strongOpsInTentative.remove(x.getRequestID().toCabMessageId());
-            }
-            else {
+            } else {
                 if (newCommits > 0)
                     tentative.set(i - newCommits, x);
             }
@@ -264,7 +266,7 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     @Override
     public void cabDelver(CabMessageID cabMessageID) {
         synchronized (lock) {
-            log.debug("CAB Delivered: {}", cabMessageID);
+            log.info("CAB Delivered: {}", cabMessageID);
             Request request = strongOpsInTentative.get(cabMessageID);
             if (request != null)
                 commit(request);
@@ -341,9 +343,8 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
     public void executeSingleStep() {
         log.debug("ESS tbRB={} tbE={}", toBeRolledBack);
         if (!toBeRolledBack.isEmpty()) {
-            Request request = toBeRolledBack.get(0);
+            Request request = toBeRolledBack.remove();
             state.rollback(request);
-            toBeRolledBack.remove(0);
         } else if (executed.size() < committed.size() + tentative.size()) {
             Request request = executed.size() < committed.size() ? committed.get(executed.size()) : tentative.get(executed.size() - committed.size());
             Response response = state.execute(request);

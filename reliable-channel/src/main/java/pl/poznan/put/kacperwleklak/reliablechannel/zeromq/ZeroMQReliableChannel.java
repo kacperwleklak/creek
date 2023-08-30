@@ -54,15 +54,7 @@ public class ZeroMQReliableChannel implements ReliableChannel {
     }
 
     private final Consumer<byte[]> messageConsumer = (bytes -> {
-        byte msgType = -1;
-        try {
-            msgType = ThriftSerializer.getMsgType(bytes);
-            log.debug("Received message type: {}", msgType);
-        } catch (TException e) {
-            e.printStackTrace();
-        }
-        byte finalMsgType = msgType;
-        listeners.forEach(listener -> listener.rDeliver(finalMsgType, bytes));
+        listeners.forEach(listener -> listener.rDeliver((byte) 0, bytes));
     });
 
 }

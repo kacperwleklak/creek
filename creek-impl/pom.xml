@@ -43,6 +43,11 @@
         </dependency>
         <dependency>
             <groupId>pl.poznan.put.kacperwleklak</groupId>
+            <artifactId>app-common</artifactId>
+            <version>0.0.1-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>pl.poznan.put.kacperwleklak</groupId>
             <artifactId>cab</artifactId>
             <version>0.0.1-SNAPSHOT</version>
         </dependency>
@@ -133,6 +138,16 @@
                 <dependency>
                     <groupId>pl.poznan.put.kacperwleklak</groupId>
                     <artifactId>ycsb</artifactId>
+                    <version>0.0.1-SNAPSHOT</version>
+                </dependency>
+            </dependencies>
+        </profile>
+        <profile>
+            <id>ycsb-redblue</id>
+            <dependencies>
+                <dependency>
+                    <groupId>pl.poznan.put.kacperwleklak</groupId>
+                    <artifactId>ycsb-redblue</artifactId>
                     <version>0.0.1-SNAPSHOT</version>
                 </dependency>
             </dependencies>

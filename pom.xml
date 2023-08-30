@@ -8,9 +8,11 @@
     <modules>
         <module>cab</module>
         <module>reliable-channel</module>
+        <module>app-common</module>
         <module>common</module>
         <module>creek-impl</module>
         <module>sqls</module>
+        <module>redblue-impl</module>
     </modules>
 
     <groupId>pl.poznan.put.kacperwleklak</groupId>

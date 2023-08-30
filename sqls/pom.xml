@@ -17,6 +17,7 @@
         <module>sql-commons</module>
         <module>rubis</module>
         <module>ycsb</module>
+        <module>ycsb-redblue</module>
     </modules>
 
     <properties>

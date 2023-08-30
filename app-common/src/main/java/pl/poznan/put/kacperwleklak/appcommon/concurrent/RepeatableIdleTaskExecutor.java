@@ -24,12 +24,6 @@ public class RepeatableIdleTaskExecutor extends ThreadPoolTaskExecutor {
     public RepeatableIdleTaskExecutor(Runnable idleTask) {
         super();
         this.idleTask = idleTask;
-        ScheduledExecutorService executor = Executors.newScheduledThreadPool(1);
-        executor.scheduleAtFixedRate(this::printDiagnostics, 5, 7, TimeUnit.SECONDS);
-    }
-
-    private void printDiagnostics()  {
-        log.info("queueSize={}", this.getThreadPoolExecutor().getQueue().size());
     }
 
     public void stopRepeating() {

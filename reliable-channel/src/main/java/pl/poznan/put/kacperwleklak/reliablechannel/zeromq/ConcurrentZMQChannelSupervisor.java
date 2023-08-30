@@ -47,7 +47,7 @@ public class ConcurrentZMQChannelSupervisor implements ReliableChannelDeliverLis
 
     @Override
     public void rDeliver(byte msgType, byte[] msg) {
-        executor.execute(() -> deserializeAndDeliver(msgType, Arrays.copyOf(msg, msg.length)));
+        executor.execute(() -> deserializeAndDeliver(msgType, msg));
     }
 
     private void serializeAndCast(TBase msg) {

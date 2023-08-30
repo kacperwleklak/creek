@@ -233,44 +233,13 @@ public class Creek implements CabDeliverListener, CabPredicate, OperationExecuto
         }
     }
 
-    // procedure commit(r : Req)
-//    private void commit(Request request) {
-//        strongOpsInTentative.remove(request.getRequestID().toCabMessageId());
-//        List<Request> committedExt = tentative.stream()
-//                .filter(tentativeRequest -> request.getCausalCtx().contains(tentativeRequest.getRequestID()))
-//                .peek(tentativeRequest -> {strongOpsInTentative.remove(tentativeRequest.getRequestID().toCabMessageId());})
-//                .collect(Collectors.toList());
-//        ArrayList<Request> newTentative = tentative.stream()
-//                .filter(tentativeRequest -> !tentativeRequest.equals(request))
-//                .filter(tentativeRequest -> !committedExt.contains(tentativeRequest))
-//                .collect(Collectors.toCollection(ArrayList::new));
-//        committed.addAll(committedExt);
-//        committed.add(request);
-//        tentative = newTentative;
-//        List<Request> newOrder = CollectionUtils.concatLists(committed, tentative);
-//        adjustExecution(newOrder);
-//        List<Request> strongOpsToCheck = committedExt.stream()
-//                .filter(Request::isStrong)
-//                .collect(Collectors.toList());
-//        strongOpsToCheck.add(request);
-//        strongOpsToCheck.forEach(strongOpsToCheckRequest -> {
-//            ResponseHandler responseHandler = reqsAwaitingResp.get(strongOpsToCheckRequest);
-//            if (responseHandler != null && responseHandler.hasResponse() && executed.contains(strongOpsToCheckRequest)) {
-//                responseToClient(responseHandler);
-//                reqsAwaitingResp.remove(strongOpsToCheckRequest);
-//            }
-//        });
-//    }
-
     //upon CAB-deliver(id : pair〈int, int〉)
     @Override
     public void cabDelver(CabMessageID cabMessageID) {
-        synchronized (lock) {
-            log.info("CAB Delivered: {}", cabMessageID);
-            Request request = strongOpsInTentative.get(cabMessageID);
-            if (request != null)
-                commit(request);
-        }
+        Request request = strongOpsInTentative.get(cabMessageID);
+        if (request != null)
+            commit(request);
+
     }
 
     private long getCurrentTime() {
